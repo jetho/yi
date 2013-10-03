@@ -1,4 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables, DoRec, Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DoRec #-}
+{-# LANGUAGE Rank2Types #-}
 
 -- Copyright (c) Tuomo Valkonen 2004.
 -- Copyright (c) Don Stewart 2004-5. http://www.cse.unsw.edu.au/~dons
@@ -332,7 +334,6 @@ runAction (EditorA act) = do
 runAction (BufferA act) = do
   withBuffer act >>= msgEditor' . show
   return ()
-runAction (TaggedA _ act) = runAction act
 
 msgEditor :: String -> YiM ()
 msgEditor = withEditor . printMsg

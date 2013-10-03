@@ -56,7 +56,7 @@ editFile filename = do
                                        else newEmptyBuffer f
       (h:_) -> return $ bkey h
 
-    withEditor $ switchToBufferE b
+    withEditor $ switchToBufferE b >> addJumpHereE
     return b
   where
     fileToNewBuffer :: FilePath -> YiM BufferRef
