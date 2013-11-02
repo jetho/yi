@@ -1,0 +1,5 @@
+#!/bin/sh
+set -ex
+( cd yi ; cabal install --only-dependencies && cabal install --force-reinstalls )
+( cd yi-contrib ; cabal install --only-dependencies && cabal install --force-reinstalls )
+
