@@ -8,7 +8,7 @@
 
 module Yi.Main (
                 -- * Static main
-                main, 
+                main,
                 -- * Command line processing
                 do_args,
                 ConsoleConfig(..),
@@ -21,6 +21,7 @@ import Control.Monad.Error
 import Data.Char
 import Data.List (intercalate, length)
 import Distribution.Text (display)
+import System.FilePath (FilePath)
 import System.Console.GetOpt
 import System.Exit
 #include "ghcconfig.h"
@@ -29,6 +30,7 @@ import Yi.Config
 import Yi.Config.Default
 import Yi.Core
 import Yi.File
+import Yi.Paths (getConfigDir)
 import Paths_yi
 
 #ifdef FRONTEND_COCOA
@@ -47,17 +49,19 @@ instance Error Err where
 
 -- | Configuration information which can be set in the command-line, but not
 -- in the user's configuration file.
-data ConsoleConfig = 
+data ConsoleConfig =
   ConsoleConfig {
      ghcOptions :: [String],
-     selfCheck :: Bool
+     selfCheck :: Bool,
+     userConfigDir :: IO FilePath
   }
 
 defaultConsoleConfig :: ConsoleConfig
-defaultConsoleConfig = 
-  ConsoleConfig { 
+defaultConsoleConfig =
+  ConsoleConfig {
                   ghcOptions = [],
-                  selfCheck = False
+                  selfCheck = False,
+                  userConfigDir = Yi.Paths.getConfigDir
                 }
 
 -- ---------------------------------------------------------------------
@@ -144,6 +148,7 @@ getConfig shouldOpenInTabs (cfg, cfgcon) opt =
              Just modifyCfg -> return $ (modifyCfg cfg, cfgcon)
              Nothing -> fail $ "Unknown emulation: " ++ show emul
       GhcOption ghcOpt -> return (cfg, cfgcon { ghcOptions = ghcOptions cfgcon ++ [ghcOpt] })
+      ConfigFile f -> return (cfg, cfgcon { userConfigDir = return f })
       _ -> return (cfg, cfgcon)
   where
     prependActions as = return $ (cfg { startActions = (fmap makeAction as) ++ startActions cfg }, cfgcon)
