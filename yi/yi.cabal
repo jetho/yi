@@ -260,7 +260,7 @@ library
     hint > 0.3.1,
     mtl >= 0.1.0.1,
     parsec >= 3.0,
-    pointedlist >= 0.4 && < 0.6,
+    pointedlist >= 0.4 && < 0.7,
     pureMD5 >= 0.2.3,
     random,
     regex-base ==0.93.*,
