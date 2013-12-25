@@ -34,7 +34,7 @@ import qualified Yi.UI.Common as Common
 import Yi.Config
 import Yi.Window
 import Yi.Style as Style
-import Graphics.Vty as Vty hiding (refresh, Default)
+import Graphics.Vty as Vty hiding (refresh, Default, text)
 import qualified Graphics.Vty as Vty
 import Yi.Keymap (makeAction, YiM)
 
@@ -77,7 +77,7 @@ start cfg ch outCh editor = do
           nattr <- getTerminalAttributes stdInput
           setTerminalAttributes stdInput (withoutMode nattr ExtendedFunctions) Immediately
           -- remove the above call to setTerminalAttributes when vty does it.
-          Vty.DisplayRegion x0 y0 <- Vty.display_bounds $ Vty.terminal v
+          (x0,y0) <- Vty.display_bounds $ Vty.output_iface v
           sz <- newIORef (fromEnum y0, fromEnum x0)
           -- fork input-reading thread. important to block *thread* on getKey
           -- otherwise all threads will block waiting for input
