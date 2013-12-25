@@ -12,7 +12,7 @@ maintainer:     yi-devel@googlegroups.com
 homepage:       http://haskell.org/haskellwiki/Yi
 bug-reports:    http://code.google.com/p/yi-editor/issues/list
 Cabal-Version:  >= 1.10
-tested-with:    GHC==7.4.2, GHC==7.6.1
+tested-with:    GHC==7.6.3
 build-type:     Simple
 data-files:
   art/*.png
@@ -241,7 +241,7 @@ library
   build-depends:
     Cabal >= 1.10 && < 1.20,
     Diff >=0.1 && <0.4,
-    array, containers, directory, process, old-locale,
+    array, containers, directory, process >= 1.0.1.1, old-locale,
     base >= 4 && < 5,
     binary >= 0.5,
     bytestring >= 0.9.1 && < 0.11,
@@ -251,6 +251,7 @@ library
     data-accessor >= 0.2.1.4 && < 0.3,
     data-accessor-mtl == 0.2.*,
     data-accessor-template >= 0.2.1.3 && < 0.2.2,
+    data-default,
     dlist >=0.4.1,
     dyre >=0.8.11,
     filepath>=1.1 && <1.4,
@@ -342,14 +343,14 @@ library
     cpp-options: -DSCION
     exposed-modules: Yi.Scion
     build-depends: scion == 0.1.*,
-      ghc >= 7,
+      ghc >= 7.6,
       ghc-syb-utils
 
   if flag (ghcAPI)
     cpp-options: -DGHC_API
 
     build-depends:
-      ghc >= 7,
+      ghc >= 7.6,
       ghc-paths ==0.1.*,
       old-time >= 1.1.0.0,
       rosezipper >= 0.1 && < 0.3,
@@ -414,7 +415,7 @@ executable yi
 
   if flag(dochack)
     buildable: False
-  
+
   if flag(profiling)
     cpp-options: -DPROFILING
 
@@ -442,4 +443,3 @@ Test-Suite test-suite
     filepath,
     directory,
     yi
-

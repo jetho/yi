@@ -14,13 +14,12 @@ import Control.Exception
 import Data.Binary (decode, encodeFile)
 import Data.Sequence as S
 import Data.Typeable ()
+import Data.Default
 import qualified Data.ByteString.Char8 as B (pack, unpack, readFile, ByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL (fromChunks)
 
 import Yi.Buffer.HighLevel (replaceBufferContent, topB)
-import Yi.Buffer.Misc (bufferDynamicValueA, BufferM)
-import Yi.Buffer.Normal (regionOfB, TextUnit(Document))
-import Yi.Buffer.Region (readRegionB)
+import Yi.Buffer.Misc (bufferDynamicValueA, elemsB)
 import Yi.Dynamic
 import Yi.Keymap (withBuffer, YiM)
 import Yi.Paths (getArticleDbFilename)
@@ -29,14 +28,14 @@ type Article = B.ByteString
 newtype ArticleDB = ADB { unADB :: Seq Article }
   deriving (Typeable, Binary)
 
-instance Initializable ArticleDB where
-    initial = ADB S.empty
+instance Default ArticleDB where
+    def = ADB S.empty
 instance YiVariable ArticleDB
 
 -- | Take an 'ArticleDB', and return the first 'Article' and an ArticleDB - *without* that article.
 split :: ArticleDB -> (Article, ArticleDB)
 split (ADB adb) = case viewl adb of
-               EmptyL -> (B.pack "", initial)
+               EmptyL -> (B.pack "", def)
                (a :< b) -> (a, ADB b)
 
 -- | Get the first article in the list. We use the list to express relative priority;
@@ -65,7 +64,7 @@ insertArticle (ADB adb) new = ADB (new <| adb)
 
 -- | Serialize given 'ArticleDB' out.
 writeDB :: ArticleDB -> YiM ()
-writeDB adb = discard $ io . join . fmap (flip encodeFile adb) $ getArticleDbFilename
+writeDB adb = void $ io . join . fmap (flip encodeFile adb) $ getArticleDbFilename
 
 -- | Read in database from 'getArticleDbFilename' and then parse it into an 'ArticleDB'.
 readDB :: YiM ArticleDB
@@ -74,23 +73,19 @@ readDB = io $ (getArticleDbFilename >>= r) `catch` returnDefault
                 -- We read in with strict bytestrings to guarantee the file is closed,
                 -- and then we convert it to the lazy bytestring data.binary expects.
                 -- This is inefficient, but alas...
-                returnDefault (_ :: SomeException) = return initial
+                returnDefault (_ :: SomeException) = return def
 
 -- | Returns the database as it exists on the disk, and the current Yi buffer contents.
---   Note that the Initializable typeclass gives us an empty Seq. So first we try the buffer
+--   Note that the Default typeclass gives us an empty Seq. So first we try the buffer
 --   state in the hope we can avoid a very expensive read from disk, and if we find nothing
 --   (that is, if we get an empty Seq), only then do we call 'readDB'.
 oldDbNewArticle :: YiM (ArticleDB, Article)
 oldDbNewArticle = do saveddb <- withBuffer $ getA bufferDynamicValueA
-                     newarticle <-fmap B.pack $ withBuffer getBufferContents
+                     newarticle <-fmap B.pack $ withBuffer elemsB
                      if not $ S.null (unADB saveddb)
                       then return (saveddb, newarticle)
                       else do olddb <- readDB
                               return (olddb, newarticle)
-
--- TODO: move to somewhere more sensible. Buffer.Misc?
-getBufferContents :: BufferM String
-getBufferContents = readRegionB =<< regionOfB Document
 
 -- | Given an 'ArticleDB', dump the scheduled article into the buffer (replacing previous contents).
 setDisplayedArticle :: ArticleDB -> YiM ()
@@ -131,6 +126,6 @@ saveAndNextArticle n = do (oldb,newa) <- oldDbNewArticle
 -- We don't want to use 'updateSetLast' since that will erase an article.
 saveAsNewArticle :: YiM ()
 saveAsNewArticle = do oldb <- readDB -- make sure we read from disk - we aren't in iread-mode!
-                      (_,newa) <- oldDbNewArticle -- we ignore the fst - the Initializable is 'empty'
+                      (_,newa) <- oldDbNewArticle -- we ignore the fst - the Default is 'empty'
                       let newdb = insertArticle oldb newa
                       writeDB newdb

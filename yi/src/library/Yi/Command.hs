@@ -12,7 +12,7 @@ import Control.Monad.Trans (MonadIO (..))
 {- External Library Module Imports -}
 {- Local (yi) module imports -}
 
-import Prelude ()
+import Prelude (length, filter)
 import Yi.Core
 import Yi.MiniBuffer
 import qualified Yi.Mode.Compilation as Compilation
@@ -20,6 +20,7 @@ import Yi.Process
 import Yi.UI.Common
 import qualified Yi.Mode.Interactive as Interactive
 import qualified Data.Rope as R
+import Data.Default
 
 ---------------------------
 -- | Changing the buffer name quite useful if you have
@@ -42,17 +43,25 @@ shellCommandE = do
 -- | shell-command with a known argument
 shellCommandV :: String -> YiM ()
 shellCommandV cmd = do
-      (cmdOut,cmdErr,exitCode) <- liftIO $ runShellCommand cmd
+      (exitCode,cmdOut,cmdErr) <- liftIO $ runShellCommand cmd
       case exitCode of
-        ExitSuccess -> withEditor $ newBufferE (Left "Shell Command Output") (R.fromString cmdOut) >> return ()
-        -- FIXME: here we get a string and convert it back to utf8; this indicates a possible bug.
+        ExitSuccess -> if length (filter (== '\n') cmdOut) > 1
+                       then withEditor . void $ -- see GitHub issue #477
+                              newBufferE (Left "Shell Command Output")
+                                         (R.fromString cmdOut)
+                       else msgEditor $ case cmdOut of
+                         "" -> "(Shell command with no output)"
+                         -- Drop trailing newline from output
+                         xs -> if last xs == '\n' then init xs else xs
+        -- FIXME: here we get a string and convert it back to utf8;
+        -- this indicates a possible bug.
         ExitFailure _ -> msgEditor cmdErr
 
 ----------------------------
 -- Cabal-related commands
 -- TODO: rename to "BuildBuffer" or something.
 newtype CabalBuffer = CabalBuffer {cabalBuffer :: Maybe BufferRef}
-    deriving (Initializable, Typeable, Binary)
+    deriving (Default, Typeable, Binary)
 
 instance YiVariable CabalBuffer
 
@@ -105,7 +114,7 @@ searchSources = grepFind (Doc "*.hs")
 -- | Perform a find+grep operation
 grepFind :: String ::: FilePatternTag -> String ::: RegexTag -> YiM ()
 grepFind (Doc filePattern) (Doc searchedRegex) = withOtherWindow $ do
-    discard $ startSubprocess "find" [".",
+    void $ startSubprocess "find" [".",
                                       "-name", "_darcs", "-prune", "-o",
                                       "-name", filePattern, "-exec", "grep", "-Hnie", searchedRegex, "{}", ";"] (const $ return ())
     withBuffer $ setMode Compilation.mode

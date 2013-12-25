@@ -25,12 +25,18 @@ gv = filter f
 -- | Query Hoogle, with given search and options. This errors out on no
 -- results or if the hoogle command is not on path.
 hoogleRaw :: String -> String -> IO [String]
-hoogleRaw srch opts = do (out,_err,status) <- runProgCommand "hoogle" [opts, srch]
-                         when (status == ExitFailure 1) $
-                             fail "Error running hoogle command.  Is hoogle on path?"
-                         let results = lines out
-                         if results == ["No results found"] then fail "No Hoogle results"
-                                                            else return results
+hoogleRaw srch opts = do
+  let options = filter (not . null) [opts, srch]
+  outp@(status,out,_err) <- runProgCommand "hoogle" options
+  case outp of
+    (ExitFailure 1, "", "") -> -- no output, probably failed to run binary
+      fail "Error running hoogle command.  Is hoogle on path?"
+    (ExitFailure 1, xs, _) -> fail $ "hoogle failed with: " ++ xs
+    _ -> return ()
+  let results = lines out
+  if results == ["No results found"]
+    then fail "No Hoogle results"
+    else return results
 
 -- | Filter the output of 'hoogleRaw' to leave just functions.
 hoogleFunctions :: String -> IO [String]
@@ -61,4 +67,3 @@ hoogleSearch = do
 
   -- The quotes help legibility between closely-packed results
   withEditor $ printMsgs $ map show results
-
