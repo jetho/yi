@@ -15,7 +15,6 @@ import Data.List
   ( isPrefixOf
   , stripPrefix
   , (\\)
-  , filter
   )
 import System.FriendlyPath
   ( expandTilda
@@ -34,13 +33,15 @@ import System.Directory
   , getCurrentDirectory
   )
 
+import Control.Applicative
 import Control.Monad.Trans (MonadIO (..))
 {- External Library Module Imports -}
 {- Local (yi) module imports -}
 
-import Prelude ()
-import Yi.Core
+import Data.Maybe (isNothing)
+import System.CanonicalizePath (canonicalizePath, replaceShorthands)
 
+import Yi.Core
 import Yi.MiniBuffer
     ( withMinibufferGen
     , mkCompleteFn
@@ -48,8 +49,7 @@ import Yi.MiniBuffer
 import Yi.Completion
     ( completeInList'
     )
-import System.CanonicalizePath (canonicalizePath, replaceShorthands)
-import Data.Maybe (isNothing)
+import Yi.Monad
 
 -- | Given a possible starting path (which if not given defaults to
 --   the current directory) and a fragment of a path we find all

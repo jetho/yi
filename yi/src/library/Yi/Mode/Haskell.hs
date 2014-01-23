@@ -18,10 +18,14 @@ module Yi.Mode.Haskell
    ghciInferType,
   ) where
 
-import Data.List (dropWhile, takeWhile, filter, drop, length)
-import Data.Maybe (maybe, listToMaybe, isJust, catMaybes)
+import Prelude hiding (and,error,elem,notElem,all,concatMap,exp)
+import Data.Maybe (listToMaybe, isJust, catMaybes)
 import Data.Default
-import Prelude (unwords, zipWith)
+import Data.Foldable
+import Data.Typeable
+import Data.Binary
+import Control.Applicative
+import Control.Monad hiding (forM_)
 import Yi.Core
 import Yi.File
 import Yi.Lexer.Alex (Tok(..),Posn(..),tokBegin,tokEnd,tokRegion)
@@ -37,9 +41,13 @@ import qualified Yi.IncrementalParse as IncrParser
 import qualified Yi.Lexer.Alex as Alex
 import qualified Yi.Lexer.LiterateHaskell as LiterateHaskell
 import Yi.Lexer.Haskell as Haskell
+import qualified Yi.Mode.GHCi as GHCi
 import qualified Yi.Mode.Interactive as Interactive
 import Yi.Modes (anyExtension, extensionOrContentsMatch)
 import Yi.MiniBuffer
+import Yi.Debug
+import Yi.Monad
+import Yi.Utils
 
 haskellAbstract :: Mode (tree TT)
 haskellAbstract = emptyMode
@@ -351,7 +359,7 @@ instance YiVariable GhciBuffer
 -- | Start GHCi in a buffer
 ghci :: YiM BufferRef
 ghci = do
-    b <- Interactive.interactive "ghci" []
+    b <- GHCi.spawnProcess "ghci" []
     withEditor $ setDynamic $ GhciBuffer $ Just b
     return b
 
@@ -383,7 +391,7 @@ ghciLoadBuffer = do
     f <- withBuffer (gets file)
     case f of
       Nothing -> error "Couldn't get buffer filename in ghciLoadBuffer"
-      Just filename -> ghciSend $ ":load " ++ filename
+      Just filename -> ghciSend $ ":load " ++ show filename
 
 -- Tells ghci to infer the type of the identifier at point. Doesn't check for errors (yet)
 ghciInferType :: YiM ()

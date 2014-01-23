@@ -1,15 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
 
 -- | Utilities for working with new Control.Exception
 module Control.Exc (ignoringException, printingException, orException)
 where
 
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 706)
 import Prelude
-#else
-import Prelude hiding (catch)
-#endif
 import Control.Exception (catch, SomeException)
 
 -- | Execute IO (Maybe a) action replacing all exceptions with return value of Nothing.

@@ -17,22 +17,28 @@ module Yi.Eval (
         consoleKeymap,
 ) where
 
-import Data.Accessor.Template
+import Prelude hiding (error)
+import Control.Applicative
+import Control.Monad
+import Control.Lens hiding (Action)
 import Data.Array
 import Data.List
 import Data.Monoid
+import Data.Typeable
+import Data.Binary
 import Data.Default
-import Prelude hiding (error, (.))
 import qualified Language.Haskell.Interpreter as LHI
 import System.Directory(doesFileExist)
 import qualified Data.HashMap.Strict as M
 
 import Yi.Config.Simple.Types
-import Yi.Core  hiding (concatMap)
+import Yi.Core
 import Yi.File
 import Yi.Hooks
 import Yi.Regex
 import qualified Yi.Paths(getEvaluatorContextFilename)
+import Yi.Utils
+import Yi.Debug
 
 -- | Runs the action, as written by the user.
 --
@@ -105,7 +111,7 @@ ghciEvaluator = Evaluator{..} where
 
     getAllNamesInScopeImpl :: YiM [String]
     getAllNamesInScopeImpl = do
-       NamesCache cache <- withEditor $ getA dynA
+       NamesCache cache <- withEditor $ use dynA
        result <-if null cache then do
             res <-io $ LHI.runInterpreter $ do
                 LHI.set [LHI.searchPath LHI.:= []]
@@ -114,7 +120,7 @@ ghciEvaluator = Evaluator{..} where
                Left err ->[show err]
                Right exports -> flattenExports exports
           else return $ sort cache
-       withEditor $ putA dynA (NamesCache result)
+       withEditor $ assign dynA (NamesCache result)
        return result
 
 
@@ -127,19 +133,20 @@ ghciEvaluator = Evaluator{..} where
     flattenExport (LHI.Data _ xs) = xs
 
 ------------------- PublishedActions evaluator
-newtype PublishedActions = PublishedActions { publishedActions_ :: M.HashMap String Action }
-  deriving(Typeable, Monoid)
-$(nameDeriveAccessors ''PublishedActions (\n -> (Just $ n ++ "A")))
+newtype PublishedActions = PublishedActions {
+    publishedActions_ :: M.HashMap String Action
+  } deriving(Typeable, Monoid)
 instance Default PublishedActions where def = mempty
+makeLensesWithSuffix "A" ''PublishedActions
 instance YiConfigVariable PublishedActions
 
 -- | Accessor for the published actions. Consider using 'publishAction'.
 publishedActions :: Field (M.HashMap String Action)
-publishedActions = publishedActions_A . customVariable
+publishedActions = customVariable . publishedActions_A
 
 -- | Publish the given action, by the given name. This will overwrite any existing actions by the same name.
 publishAction :: (YiAction a x, Show x) => String -> a -> ConfigM ()
-publishAction s a = modA publishedActions (M.insert s (makeAction a))
+publishAction s a = (%=) publishedActions (M.insert s (makeAction a))
 
 {- | Evaluator based on a fixed list of published actions. Has a few differences from 'ghciEvaluator':
 

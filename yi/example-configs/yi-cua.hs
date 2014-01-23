@@ -1,10 +1,6 @@
 import Yi
 
--- Preamble
-import Yi.Prelude
-import Prelude ()
-
--- Import the desired UI as needed. 
+-- Import the desired UI as needed.
 -- Some are not complied in, so we import none here.
 
 -- import Yi.UI.Vty (start)
@@ -23,24 +19,23 @@ defaultUIConfig = configUI myConfig
 main :: IO ()
 main = yi $ myConfig
   {
-   
+
    -- Keymap Configuration
    defaultKm = defaultKm myConfig,
 
    -- UI Configuration
-   -- Override the default UI as such: 
+   -- Override the default UI as such:
    startFrontEnd = startFrontEnd myConfig,
                     -- Yi.UI.Vty.start -- for Vty
    -- (can be overridden at the command line)
    -- Options:
    configUI = defaultUIConfig
-     { 
+     {
        configFontSize = Nothing,
                         -- 'Just 10' for specifying the size.
        configTheme = configTheme defaultUIConfig,
                      -- darkBlueTheme  -- Change the color scheme here.
-       
-       configWindowFill = ' ' 
+
+       configWindowFill = ' '
      }
   }
-

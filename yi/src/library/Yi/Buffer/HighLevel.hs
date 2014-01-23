@@ -2,18 +2,17 @@
 -- Copyright (C) 2008 JP Bernardy
 module Yi.Buffer.HighLevel where
 
-import Prelude (FilePath)
-import Yi.Prelude
-
 import Control.Monad.RWS.Strict (ask)
 import Control.Monad.State hiding (forM, forM_, sequence_)
+import Control.Applicative
+import Control.Monad
+import Control.Lens hiding (moveTo, (-~), (+~), re, transform)
 
 import Data.Char
-import Data.List (isPrefixOf, sort, lines, drop, filter, length,
-                  takeWhile, dropWhile, reverse, map, intersperse, zip)
+import Data.List (isPrefixOf, sort, intersperse)
 import Data.Maybe (fromMaybe, listToMaybe, catMaybes)
-import Data.Ord
 import qualified Data.Rope as R
+import Data.Rope (Rope)
 import Data.Time (UTCTime)
 import Data.Tuple (swap)
 
@@ -24,6 +23,7 @@ import Yi.Buffer.Region
 import Yi.String
 import Yi.Window
 import Yi.Config.Misc (ScrollStyle(SingleLine))
+import Yi.Utils
 
 -- ---------------------------------------------------------------------
 -- Movement operations
@@ -433,12 +433,12 @@ scrollB n = do
     void $ gotoLnFrom n
     setMarkPointB fr =<< pointB
   w <- askWindow wkey
-  modA pointFollowsWindowA (\old w' -> if w == w' then True else old w')
+  (%=) pointFollowsWindowA (\old w' -> if w == w' then True else old w')
 
 -- | Move the point to inside the viewable region
 snapInsB :: BufferM ()
 snapInsB = do
-    movePoint <- getA pointFollowsWindowA
+    movePoint <- use pointFollowsWindowA
     w <- askWindow wkey
     when (movePoint w) $ do
         r <- winRegionB
@@ -464,7 +464,7 @@ pointScreenRelPosition _ _ _ = Within -- just to disable the non-exhaustive patt
 -- | Move the visible region to include the point
 snapScreenB :: Maybe ScrollStyle ->BufferM Bool
 snapScreenB style = do
-    movePoint <- getA pointFollowsWindowA
+    movePoint <- use pointFollowsWindowA
     w <- askWindow wkey
     if movePoint w then return False else do
         inWin <- pointInWindowB =<< pointB
@@ -523,7 +523,7 @@ getRawestSelectRegionB = do
 -- | Return the empty region if the selection is not visible.
 getRawSelectRegionB :: BufferM Region
 getRawSelectRegionB = do
-  s <- getA highlightSelectionA
+  s <- use highlightSelectionA
   if s then getRawestSelectRegionB else do
      p <- pointB
      return $ mkRegion p p
@@ -531,7 +531,7 @@ getRawSelectRegionB = do
 -- | Get the current region boundaries. Extended to the current selection unit.
 getSelectRegionB :: BufferM Region
 getSelectRegionB = do
-  regionStyle <- getA regionStyleA
+  regionStyle <- use regionStyleA
   r <- getRawSelectRegionB
   mkRegionOfStyleB (regionStart r) (regionEnd r) regionStyle
 

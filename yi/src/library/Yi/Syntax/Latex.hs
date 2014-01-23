@@ -1,19 +1,22 @@
-{-# LANGUAGE FlexibleInstances, TypeFamilies #-}
+{-# LANGUAGE
+  FlexibleInstances,
+  DeriveFunctor,
+  DeriveFoldable,
+  TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-incomplete-patterns #-} -- uniplate patterns
 -- Copyright (c) JP Bernardy 2008
 module Yi.Syntax.Latex where
 
+import Control.Applicative
 import Yi.IncrementalParse
 import Yi.Lexer.Alex
 import Yi.Lexer.Latex
 import Yi.Style
 import Yi.Syntax.Tree
 import Yi.Syntax
-import Yi.Prelude
-import Prelude ()
-import Data.Monoid (Endo(..), mappend, mempty)
-import Data.List (zip)
-
+import Data.Monoid
+import Data.Traversable
+import Data.Foldable (Foldable, foldMap)
 
 isNoise :: Token -> Bool
 isNoise Text = True
@@ -34,18 +37,7 @@ data Tree t
     | Atom t
     | Error t
     | Expr (Expr t)
-      deriving Show
-
-
-
---instance Functor Tree where
---  fmap = fmapDefault
-
-instance Foldable Tree where
-    foldMap f (Atom t) = f t
-    foldMap f (Error t ) = f t
-    foldMap f (Paren l g r) = f l <> foldMap f g <> f r
-    foldMap f (Expr g) = foldMap (foldMap f) g
+      deriving (Show, Functor, Foldable)
 
 
 instance IsTree Tree where

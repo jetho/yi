@@ -5,13 +5,16 @@ module Yi.Mode.Abella
   , abellaEval, abellaEvalFromProofPoint, abellaUndo, abellaGet, abellaSend)
 where
 
-import Prelude ()
-import Control.Monad (replicateM_, join)
+import Control.Applicative
+import Control.Monad
+import Control.Lens hiding (moveTo)
 import Data.Char (isSpace)
 import Data.Binary
 import Data.Maybe (isJust)
 import Data.List (isInfixOf)
 import Data.Default
+import Data.Typeable
+import Data.Traversable (sequenceA)
 import Yi.Core
 import qualified Yi.Mode.Interactive as Interactive
 import Yi.Modes (TokenBasedMode, linearSyntaxMode, anyExtension)
@@ -28,7 +31,7 @@ abellaModeGen abellaBinding =
   , modeApplies = anyExtension ["thm"]
   , modeGetAnnotations = tokenBasedAnnots (sequenceA . tokToSpan . fmap Abella.tokenToText)
   , modeToggleCommentSelection = toggleCommentSelectionB "% " "%"
-  , modeKeymap = topKeymapA ^: ((<||)
+  , modeKeymap = topKeymapA %~ ((<||)
      (choice
       [ abellaBinding 'p' ?*>>! sav abellaUndo
       , abellaBinding 'e' ?*>>! sav abellaEval
@@ -92,7 +95,7 @@ abellaAbort = do abellaSend "abort."
 -- | Start Abella in a buffer
 abella :: CommandArguments -> YiM BufferRef
 abella (CommandArguments args) = do
-    b <- Interactive.interactive "abella" args
+    b <- Interactive.spawnProcess "abella" args
     withEditor . setDynamic . AbellaBuffer $ Just b
     return b
 

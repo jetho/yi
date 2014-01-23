@@ -1,11 +1,14 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances, TypeOperators #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, MultiParamTypeClasses,
+             UndecidableInstances, TypeOperators, LambdaCase #-}
 
--- Copyright (c) 2005,2007,2008 Jean-Philippe Bernardy
+{- |
+Module      :  Yi.UI.Pango
+Copyright   :  (c) 2005,2007,2008 Jean-Philippe Bernardy
+License     :  GPL
 
-{-
-  This module is aimed at being a helper for the Emacs keybindings.
-  In particular this should be useful for anyone that has a custom
-  keymap derived from or based on the Emacs one.
+This module is aimed at being a helper for the Emacs keybindings. In
+particular this should be useful for anyone that has a custom keymap
+derived from or based on the Emacs one.
 -}
 
 module Yi.Keymap.Emacs.Utils
@@ -38,10 +41,11 @@ module Yi.Keymap.Emacs.Utils
 where
 
 {- Standard Library Module Imports -}
-
-import Prelude (take)
+import Control.Applicative
+import Control.Monad
+import Control.Lens hiding (re,act)
+import Data.Foldable (toList)
 import Data.List ((\\))
-import Data.Maybe (maybe)
 import System.FriendlyPath ()
 import System.FilePath (takeDirectory, takeFileName, (</>))
 import System.Directory
@@ -50,8 +54,6 @@ import System.Directory
 import Control.Monad.Trans (MonadIO (..))
 {- External Library Module Imports -}
 {- Local (yi) module imports -}
-
-import Control.Monad (filterM, replicateM_)
 import Yi.Command (cabalConfigureE, cabalBuildE, reloadProjectE)
 import Yi.Core
 import Yi.Eval
@@ -62,6 +64,8 @@ import Yi.Regex
 import Yi.Tag
 import Yi.Search
 import Yi.Window
+import Yi.Utils
+import Yi.Monad
 {- End of Module Imports -}
 
 type UnivArgument = Maybe Int
@@ -112,7 +116,8 @@ askIndividualSave hasQuit allBuffers@(firstBuffer : others) =
   askKeymap = choice ([ char 'n' ?>>! noAction
                       , char 'y' ?>>! yesAction
                       , char '!' ?>>! allAction
-                      , oneOf [char 'c', ctrl $ char 'g'] >>! closeBufferAndWindowE
+                      , oneOf [char 'c', ctrl $ char 'g']
+                        >>! closeBufferAndWindowE
                         -- cancel
                       ] ++ [char 'q' ?>>! quitEditor | hasQuit])
   yesAction = do fwriteBufferE (bkey firstBuffer)
@@ -139,7 +144,8 @@ modifiedQuitEditor =
   do modifiedBuffers <- getModifiedBuffers
      if null modifiedBuffers
         then quitEditor
-        else withEditor $ spawnMinibufferE modifiedMessage (const askKeymap) >> return ()
+        else withEditor $ spawnMinibufferE modifiedMessage (const askKeymap)
+                          >> return ()
   where
   modifiedMessage = "Modified buffers exist really quit? (y/n)"
 
@@ -183,26 +189,30 @@ queryReplaceE = do
     withMinibufferFree "Replace:" $ \replaceWhat -> do
     withMinibufferFree "With:" $ \replaceWith -> do
     b <- gets currentBuffer
-    win <- getA currentWindowA
+    win <- use currentWindowA
     let replaceKm = choice [char 'n' ?>>! qrNext win b re,
                             char '!' ?>>! qrReplaceAll win b re replaceWith,
-                            oneOf [char 'y', char ' '] >>! qrReplaceOne win b re replaceWith,
+                            oneOf [char 'y', char ' ']
+                            >>! qrReplaceOne win b re replaceWith,
                             oneOf [char 'q', ctrl (char 'g')] >>! qrFinish
                            ]
         Right re = makeSearchOptsM [] replaceWhat
     withEditor $ do
        setRegexE re
        void $ spawnMinibufferE
-            ("Replacing " ++ replaceWhat ++ " with " ++ replaceWith ++ " (y,n,q,!):")
+            ("Replacing " ++ replaceWhat ++ " with "
+             ++ replaceWith ++ " (y,n,q,!):")
             (const replaceKm)
        qrNext win b re
 
 executeExtendedCommandE :: YiM ()
-executeExtendedCommandE = withMinibuffer "M-x" (const getAllNamesInScope) execEditorAction
+executeExtendedCommandE
+  = withMinibuffer "M-x" (const getAllNamesInScope) execEditorAction
 
 evalRegionE :: YiM ()
 evalRegionE = do
-  void $ withBuffer (getSelectRegionB >>= readRegionB) >>= return -- FIXME: do something sensible.
+  -- FIXME: do something sensible.
+  void $ withBuffer (getSelectRegionB >>= readRegionB) >>= return
   return ()
 
 -- * Code for various commands
@@ -269,12 +279,17 @@ scrollUpE a = case a of
 
 switchBufferE :: YiM ()
 switchBufferE = do
-    openBufs <- fmap bufkey . toList <$> getA windowsA
-    names <- withEditor $ do bs <- fmap bkey <$> getBufferStack
-                             let choices = (bs \\ openBufs) ++ openBufs -- put the open buffers at the end.
-                             prefix <- gets commonNamePrefix
-                             forM choices $ \k -> gets (shortIdentString prefix . findBufferWith k)
-    withMinibufferFin "switch to buffer:" names (withEditor . switchToBufferWithNameE)
+    openBufs <- fmap bufkey . toList <$> use windowsA
+    names <- withEditor $ do
+      bs <- fmap bkey <$> getBufferStack
+
+      -- put the open buffers at the end.
+      let choices = (bs \\ openBufs) ++ openBufs
+
+      prefix <- gets commonNamePrefix
+      forM choices $ \k -> gets (shortIdentString prefix . findBufferWith k)
+    withMinibufferFin "switch to buffer:" names
+      (withEditor . switchToBufferWithNameE)
 
 killBufferE :: BufferRef ::: ToKill -> YiM ()
 killBufferE (Doc b) = do
@@ -286,16 +301,37 @@ killBufferE (Doc b) = do
                            ]
         delBuf = deleteBuffer b
     withEditor $
-       if ch then (spawnMinibufferE (identString buf ++ " changed, close anyway? (y/n)") (const askKeymap)) >> return ()
-             else delBuf
+       if ch
+       then spawnMinibufferE
+            (identString buf ++ " changed, close anyway? (y/n)")
+            (const askKeymap)
+            >> return ()
+       else delBuf
 
 
 -- | If on separators (space, tab, unicode seps), reduce multiple
---   separators to just a single separator.
+-- separators to just a single separator. If we aren't looking at a separator,
+-- insert a single space. This kind of behaves as emacs ‘just-one-space’
+-- function with the argument of ‘1’ but it prefers to use the separator we're
+-- looking at instead of assuming a space.
 justOneSep :: BufferM ()
-justOneSep = doIfCharB isAnySep $ do genMaybeMoveB unitSepThisLine (Backward,InsideBound) Backward
-                                     moveB Character Forward
-                                     doIfCharB isAnySep $ deleteB unitSepThisLine Forward
+justOneSep = readB >>= \c -> do
+  pointB >>= \case
+    Point 0 -> if isAnySep c then deleteSeparators else insertB ' '
+    Point x ->
+      if isAnySep c
+      then deleteSeparators
+      else readAtB (Point $ x - 1) >>= \d -> do
+        -- We weren't looking at separator but there might be one behind us
+        if isAnySep d
+          then moveB Character Backward >> deleteSeparators
+          else insertB ' ' -- no separators, insert a space just like emacs does
+  where
+    deleteSeparators = do
+      genMaybeMoveB unitSepThisLine (Backward, InsideBound) Backward
+      moveB Character Forward
+      doIfCharB isAnySep $ deleteB unitSepThisLine Forward
+
 
 
 -- | Join this line to previous (or next N if universal)
@@ -303,7 +339,8 @@ joinLinesE :: UnivArgument -> BufferM ()
 joinLinesE a = do case a of
                      Nothing -> return ()
                      Just _n -> moveB VLine Forward
-                  moveToSol >> transformB (\_ -> " ") Character Backward >> justOneSep
+                  moveToSol >> transformB (\_ -> " ") Character Backward
+                    >> justOneSep
 
 -- | Shortcut to use a default list when a blank list is given.
 -- Used for default values to emacs queries

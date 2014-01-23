@@ -3,6 +3,7 @@
 -- We have it as a separate mode so users can bind the commands to this mode specifically.
 module Yi.Mode.IReader where
 
+import Control.Lens
 import Data.Char (intToDigit)
 import Yi.Buffer.Misc
 import Yi.IReader
@@ -10,11 +11,10 @@ import Yi.Keymap
 import Yi.Keymap.Keys
 import Yi.Core (msgEditor)
 import Yi.Modes (anyExtension, fundamentalMode)
-import Yi.Prelude ((^:))
 
 abstract :: forall syntax. Mode syntax
 abstract = fundamentalMode { modeApplies = anyExtension ["irtxt"],
-                             modeKeymap = topKeymapA ^: ikeys }
+                             modeKeymap = topKeymapA %~ ikeys }
     where -- Default bindings.
           -- ikeys :: (MonadInteract f Yi.Keymap.Action Event) => f () -> f ()
           ikeys = (choice ([metaCh '`' ?>>! saveAsNewArticle,

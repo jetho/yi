@@ -1,4 +1,11 @@
-{-# LANGUAGE ScopedTypeVariables, ExistentialQuantification, GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
+{-# LANGUAGE
+  ScopedTypeVariables,
+  ExistentialQuantification,
+  GeneralizedNewtypeDeriving,
+  DeriveFunctor,
+  DeriveFoldable,
+  DeriveTraversable,
+  MultiParamTypeClasses #-}
 --
 -- Copyright (C) 2007 Don Stewart - http://www.cse.unsw.edu.au/~dons
 --
@@ -20,9 +27,8 @@ where
 import qualified  Data.Map as M
 import Control.Arrow
 import Yi.Style
-import Yi.Prelude
-import Prelude ()
-import Data.List (takeWhile)
+import Data.Foldable
+import Data.Traversable
 import Yi.Buffer.Basic
 import Yi.Region
 
@@ -30,12 +36,7 @@ type Length = Int                   -- size in #codepoints
 
 type Stroke = Span StyleName
 data Span a = Span {spanBegin :: !Point, spanContents :: !a, spanEnd :: !Point}
-    deriving Show
-
-instance Traversable Span where
-    traverse f (Span l a r) = (\a' -> Span l a' r) <$> f a
-instance Foldable Span where foldMap = foldMapDefault
-instance Functor Span where fmap = fmapDefault
+    deriving (Show, Functor, Foldable, Traversable)
 
 -- | The main type of syntax highlighters.  This record type combines all
 -- the required functions, and is parametrized on the type of the internal

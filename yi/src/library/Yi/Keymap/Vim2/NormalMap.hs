@@ -2,10 +2,9 @@ module Yi.Keymap.Vim2.NormalMap
     ( defNormalMap
     ) where
 
-import Yi.Prelude
-import Prelude ()
-
-import Control.Monad (replicateM_)
+import Control.Monad
+import Control.Applicative
+import Control.Lens hiding (moveTo, re)
 
 import Data.Char
 import Data.List (group)
@@ -29,6 +28,7 @@ import Yi.MiniBuffer
 import Yi.Misc
 import Yi.Regex (seInput, makeSearchOptsM)
 import Yi.Search (getRegexE, isearchInitE, setRegexE, makeSimpleSearch)
+import Yi.Monad
 
 mkDigitBinding :: Char -> VimBinding
 mkDigitBinding c = mkBindingE Normal Continue (char c, return (), mutate)
@@ -88,7 +88,11 @@ jumpBindings :: [VimBinding]
 jumpBindings = fmap (mkBindingE Normal Drop)
     [ (ctrlCh 'o', jumpBackE, id)
     , (spec KTab, jumpForwardE, id)
+    , (ctrlCh '^', controlCarrot, resetCount)
+    , (ctrlCh '6', controlCarrot, resetCount)
     ]
+  where
+    controlCarrot = alternateBufferE . (+ (-1)) =<< getCountE
 
 finishingBingings :: [VimBinding]
 finishingBingings = fmap (mkStringBindingE Normal Finish)
@@ -198,7 +202,7 @@ nonrepeatableBindings = fmap (mkBindingE Normal Drop)
     -- Changing
     , (char 'C',
         do region <- withBuffer0 $ regionWithTwoMovesB (return ()) moveToEol
-           void $ operatorApplyToRegionE opDelete 1 $ StyledRegion Exclusive region
+           void $ operatorApplyToRegionE opChange 1 $ StyledRegion Exclusive region
         , switchMode $ Insert 'C')
     , (char 's', cutCharE Forward =<< getCountE, switchMode $ Insert 's')
     , (char 'S',
@@ -281,7 +285,7 @@ searchWordE wholeWord dir = do
 
     let search re = do
             setRegexE re
-            putA searchDirectionA dir
+            assign searchDirectionA dir
             withCount $ continueSearching (const dir)
 
     if wholeWord
@@ -309,7 +313,7 @@ continueSearching fdir = do
     mbRegex <- getRegexE
     case mbRegex of
         Just regex -> do
-            dir <- fdir <$> getA searchDirectionA
+            dir <- fdir <$> use searchDirectionA
             printMsg $ (if dir == Forward then '/' else '?') : seInput regex
             void $ doVimSearch Nothing [] dir
         Nothing -> printMsg "No previous search pattern"
@@ -334,8 +338,8 @@ repeatGotoCharE mutateDir = do
 
 enableVisualE :: RegionStyle -> EditorM ()
 enableVisualE style = withBuffer0 $ do
-    putA regionStyleA style
-    putA rectangleSelectionA $ Block == style
+    assign regionStyleA style
+    assign rectangleSelectionA $ Block == style
     setVisibleSelection True
     pointB >>= setSelectionMarkPointB
 

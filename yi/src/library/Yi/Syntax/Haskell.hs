@@ -1,5 +1,9 @@
-{-# LANGUAGE FlexibleInstances, TypeFamilies
-  , TemplateHaskell, DeriveDataTypeable #-}
+{-# LANGUAGE
+  FlexibleInstances,
+  TypeFamilies,
+  TemplateHaskell,
+  DeriveDataTypeable,
+  DeriveFoldable #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures -fno-warn-incomplete-patterns -fno-warn-name-shadowing #-}
 -- we have lots of parsers which don't want signatures; and we have uniplate patterns
 
@@ -17,20 +21,16 @@ module Yi.Syntax.Haskell ( PModule
                          , indentScanner
                          ) where
 
-import Prelude ()
+import Control.Applicative
+import Data.Foldable hiding (elem, notElem)
 import Data.Maybe
 import Data.List ((\\))
-import qualified Data.Foldable
 import Yi.IncrementalParse
 import Yi.Lexer.Alex
 import Yi.Lexer.Haskell
 import Yi.Syntax.Layout
 import Yi.Syntax.Tree
 import Yi.Syntax
-import Yi.Prelude
-import Prelude ()
-import Data.DeriveTH
-import Data.Tuple (uncurry)
 import Control.Arrow ((&&&))
 
 indentScanner :: Scanner (AlexState lexState) (TT)
@@ -137,9 +137,8 @@ data Exp t
     | DC (Exp t) -- ^ Data constructor
     | PLet (PAtom t) (Exp t) (Exp t) -- ^ let expression
     | PIn t [Exp t]
-  deriving Show
+  deriving (Show, Foldable)
 
-$(derive makeFoldable ''Exp)
 instance IsTree Exp where
    emptyNode = Expr []
    uniplate tree = case tree of
@@ -424,9 +423,13 @@ pAtype = pAtype'
      <|> pErr
 
 pAtype' :: Parser TT (Exp TT)
-pAtype' = pQvarid
+pAtype' = pTypeCons
       <|> pParen (many $ pExprElem [])
       <|> pBrack (many $ pExprElem [])
+
+pTypeCons :: Parser TT (Exp TT)
+pTypeCons = Bin <$> pAtom [ConsIdent]
+            <*> please (pMany $ pAtom [VarIdent, ConsIdent])
 
 pContext :: Parser TT (Exp TT)
 pContext = Context <$> pOpt pForAll
@@ -637,7 +640,7 @@ pTypeElem at
        (sym $ flip elem $ isNoiseErr at) <*> errTok <*> pEmpty)
   <|> (PAtom <$> sym (flip notElem (isNotNoise at)) <*> pEmpty)
 
--- | List of things that allways should be parsed as errors
+-- | List of things that always should be parsed as errors
 isNoiseErr :: [Token] -> [Token]
 isNoiseErr r = recoverableSymbols ++ r
 
@@ -701,4 +704,3 @@ errTok = mkTok <$> curPos
          tB Nothing = maxBound
          tB (Just x) = tokBegin x
          mkTok p = Tok (Special '!') 0 (startPosn {posnOfs = p})
-

@@ -12,7 +12,9 @@ import Control.Monad.Trans (MonadIO (..))
 {- External Library Module Imports -}
 {- Local (yi) module imports -}
 
-import Prelude (length, filter)
+import Control.Applicative
+import Control.Monad
+import Control.Lens
 import Yi.Core
 import Yi.MiniBuffer
 import qualified Yi.Mode.Compilation as Compilation
@@ -21,6 +23,9 @@ import Yi.UI.Common
 import qualified Yi.Mode.Interactive as Interactive
 import qualified Data.Rope as R
 import Data.Default
+import Data.Typeable
+import Yi.Utils
+import Yi.Monad
 
 ---------------------------
 -- | Changing the buffer name quite useful if you have
@@ -31,7 +36,7 @@ changeBufferNameE =
   withMinibufferFree "New buffer name:" strFun
   where
   strFun :: String -> YiM ()
-  strFun = withBuffer . putA identA . Left
+  strFun = withBuffer . assign identA . Left
 
 ----------------------------
 -- | shell-command with argument prompt
@@ -104,7 +109,7 @@ cabalBuildE = cabalRun "build" (const $ return ())
 shell :: YiM BufferRef
 shell = do
     sh <- io shellFileName
-    Interactive.interactive sh ["-i"]
+    Interactive.spawnProcess sh ["-i"]
     -- use the -i option for interactive mode (assuming bash)
 
 -- | Search the source files in the project.

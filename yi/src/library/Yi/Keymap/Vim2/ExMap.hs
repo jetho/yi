@@ -2,9 +2,6 @@ module Yi.Keymap.Vim2.ExMap
     ( defExMap
     ) where
 
-import Prelude (unwords, drop, length, reverse)
-import Yi.Prelude
-
 import Data.Char (isSpace)
 import Data.Maybe (fromJust)
 import Data.List.Split (splitWhen)
@@ -18,6 +15,7 @@ import Yi.Keymap.Vim2.Common
 import Yi.Keymap.Vim2.StateUtils
 import Yi.Keymap.Vim2.Utils
 import Yi.Keymap.Vim2.Ex
+import Yi.Utils
 
 defExMap :: [String -> Maybe ExCommand] -> [VimBinding]
 defExMap cmdParsers =
@@ -126,7 +124,8 @@ failBindingE = VimBindingE prereq action
     where prereq evs s = matchFromBool . and $ [vsMode s == Ex, evs == "<CR>"]
           action _ = do
               exitEx False
-              printMsg "Unknown command"
+              s <- getDynamic
+              printMsg $ "Not an editor command: " ++ (vsOngoingInsertEvents s)
               return Drop
 
 printable :: VimBinding

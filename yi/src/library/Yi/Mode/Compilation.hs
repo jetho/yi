@@ -1,7 +1,8 @@
 -- Copyright (c) Jean-Philippe Bernardy 2008
 module Yi.Mode.Compilation where
 
-import Prelude ()
+import Control.Monad
+import Control.Lens hiding (moveTo)
 import Yi.Core
 import Yi.File (editFile)
 import Yi.Lexer.Alex (Tok(..), Posn(..))
@@ -15,7 +16,7 @@ mode = (linearSyntaxMode Compilation.initState Compilation.alexScanToken tokenTo
   {
    modeApplies = modeNeverApplies,
    modeName = "compilation",
-   modeKeymap = topKeymapA ^: ((<||) (spec KEnter ?>>! withSyntax modeFollow)),
+   modeKeymap = topKeymapA %~ ((<||) (spec KEnter ?>>! withSyntax modeFollow)),
    modeFollow = \synTree -> YiA (follow synTree)
   }
     where tokenToStyle _ = commentStyle

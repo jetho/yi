@@ -3,7 +3,6 @@
 module Yi.Config where
 
 import Data.Prototype
-import Data.Accessor.Template
 
 import Yi.Buffer
 import Yi.Layout
@@ -16,6 +15,7 @@ import Yi.Style
 import Yi.Style.Library
 import {-# source #-} Yi.UI.Common
 import qualified Yi.Interact as I
+import Yi.Utils
 
 data UIConfig = UIConfig {
    configVtyEscDelay :: Int,
@@ -82,5 +82,5 @@ configTopLevelKeymap = extractTopKeymap . defaultKm
 
 type UIBoot = Config -> (Event -> IO ()) -> ([Action] -> IO ()) ->  Editor -> IO UI
 
-$(nameDeriveAccessors ''Config (\n -> Just (n ++ "A")))
-$(nameDeriveAccessors ''UIConfig (\n -> Just (n ++ "A")))
+makeLensesWithSuffix "A" ''Config
+makeLensesWithSuffix "A" ''UIConfig

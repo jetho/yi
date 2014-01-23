@@ -6,14 +6,12 @@
 -- \"incremental reading\", see <http://en.wikipedia.org/wiki/Incremental_reading>.
 module Yi.IReader where
 
-import Prelude ()
-import Yi.Prelude hiding (empty)
-
-import Control.Monad.State (join)
+import Control.Lens
 import Control.Exception
-import Data.Binary (decode, encodeFile)
+import Control.Monad
+import Data.Binary
 import Data.Sequence as S
-import Data.Typeable ()
+import Data.Typeable
 import Data.Default
 import qualified Data.ByteString.Char8 as B (pack, unpack, readFile, ByteString)
 import qualified Data.ByteString.Lazy.Char8 as BL (fromChunks)
@@ -23,6 +21,7 @@ import Yi.Buffer.Misc (bufferDynamicValueA, elemsB)
 import Yi.Dynamic
 import Yi.Keymap (withBuffer, YiM)
 import Yi.Paths (getArticleDbFilename)
+import Yi.Utils
 
 type Article = B.ByteString
 newtype ArticleDB = ADB { unADB :: Seq Article }
@@ -46,21 +45,21 @@ getLatestArticle = fst . split -- we only want the article
 -- | We remove the old first article, and we stick it on the end of the
 -- list using the presumably modified version.
 removeSetLast :: ArticleDB -> Article -> ArticleDB
-removeSetLast adb old = ADB (unADB (snd (split adb)) |> old)
+removeSetLast adb old = ADB (unADB (snd (split adb)) S.|> old)
 
 -- we move the last entry to  the entry 'length `div` n'from the beginning; so 'shift 1' would do nothing
 -- (eg. the last index is 50, 50 `div` 1 == 50, so the item would be moved to where it is)
 --  'shift 2' will move it to the middle of the list, though; last index = 50, then 50 `div` 2 will shift
 -- the item to index 25, and so on down to 50 `div` 50 - the head of the list/Seq.
 shift :: Int ->ArticleDB -> ArticleDB
-shift n adb = if n < 2 || lst < 2 then adb else ADB $ (r |> lastentry) >< s'
+shift n adb = if n < 2 || lst < 2 then adb else ADB $ (r S.|> lastentry) >< s'
               where lst = S.length (unADB adb) - 1
                     (r,s) = S.splitAt (lst `div` n) (unADB adb)
                     (s' :> lastentry) = S.viewr s
 
 -- | Insert a new article with top priority (that is, at the front of the list).
 insertArticle :: ArticleDB -> Article -> ArticleDB
-insertArticle (ADB adb) new = ADB (new <| adb)
+insertArticle (ADB adb) new = ADB (new S.<| adb)
 
 -- | Serialize given 'ArticleDB' out.
 writeDB :: ArticleDB -> YiM ()
@@ -80,7 +79,7 @@ readDB = io $ (getArticleDbFilename >>= r) `catch` returnDefault
 --   state in the hope we can avoid a very expensive read from disk, and if we find nothing
 --   (that is, if we get an empty Seq), only then do we call 'readDB'.
 oldDbNewArticle :: YiM (ArticleDB, Article)
-oldDbNewArticle = do saveddb <- withBuffer $ getA bufferDynamicValueA
+oldDbNewArticle = do saveddb <- withBuffer $ use bufferDynamicValueA
                      newarticle <-fmap B.pack $ withBuffer elemsB
                      if not $ S.null (unADB saveddb)
                       then return (saveddb, newarticle)
@@ -93,7 +92,7 @@ setDisplayedArticle newdb = do let next = getLatestArticle newdb
                                withBuffer $ do replaceBufferContent $ B.unpack next
                                                topB -- replaceBufferContents moves us
                                                     -- to bottom?
-                                               putA bufferDynamicValueA newdb
+                                               assign bufferDynamicValueA newdb
 
 -- | Go to next one. This ignores the buffer, but it doesn't remove anything from the database.
 -- However, the ordering does change.

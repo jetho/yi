@@ -3,8 +3,8 @@
      MultiParamTypeClasses, TypeSynonymInstances #-}
 module Yi.Config.Users.Jeff (myConfig) where
 
-import Yi.Prelude
-import Prelude ()
+import Control.Applicative
+import Control.Lens
 
 import Yi
 
@@ -21,7 +21,7 @@ myConfig = defaultVimConfig
     { configTheme = defaultTheme
     , configWindowFill = '~'
     }
-  , startActions = [makeAction (maxStatusHeightA %= 20 :: EditorM ())]
+  , startActions = [makeAction (maxStatusHeightA .= 20 :: EditorM ())]
   -- , startFrontEnd = Pango.start
   }
 

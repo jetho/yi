@@ -1,8 +1,7 @@
 module Yi.Mode.Interactive where
 
 import Control.Concurrent (threadDelay)
-import Data.List (elemIndex)
-import Prelude ()
+import Control.Lens
 import Yi.Modes
 import Yi.Core
 import Yi.History
@@ -10,14 +9,16 @@ import Yi.Lexer.Alex (Tok)
 import Yi.Lexer.Compilation (Token)
 import qualified Yi.Mode.Compilation as Compilation
 import qualified Yi.Syntax.OnlineTree as OnlineTree
+import Yi.Monad
+import Yi.Utils
 
 mode :: Mode (OnlineTree.Tree (Tok Token))
 mode = Compilation.mode
   { modeApplies = modeNeverApplies,
     modeName = "interactive",
-    modeKeymap = topKeymapA ^: ((<||)
+    modeKeymap = topKeymapA %~ ((<||)
      (choice
-      [spec KHome ?>>! ghciHome,
+      [spec KHome ?>>! moveToSol,
        spec KEnter ?>>! do
           eof <- withBuffer $ atLastLine
           if eof
@@ -25,18 +26,8 @@ mode = Compilation.mode
             else withSyntax modeFollow,
        meta (char 'p') ?>>! interactHistoryMove 1,
        meta (char 'n') ?>>! interactHistoryMove (-1)
-      ])) }
-
--- | The GHCi prompt always begins with ">"; this goes to just before it, or if one is already at the start
--- of the prompt, goes to the beginning of the line. (If at the beginning of the line, this pushes you forward to it.)
-ghciHome :: BufferM ()
-ghciHome = do l <- readLnB
-              let epos = elemIndex '>' l
-              case epos of
-                  Nothing -> moveToSol
-                  Just pos -> do (_,mypos) <- getLineAndCol
-                                 if mypos == (pos+2) then moveToSol
-                                  else moveToSol >> moveXorEol (pos+2)
+      ]))
+  }
 
 interactId :: String
 interactId = "Interact"
@@ -63,17 +54,23 @@ setInput :: String -> BufferM ()
 setInput val = flip replaceRegionB val =<< getInputRegion
 
 -- | Open a new buffer for interaction with a process.
-interactive :: String -> [String] -> YiM BufferRef
-interactive cmd args = do
+spawnProcess :: String -> [String] -> YiM BufferRef
+spawnProcess = spawnProcessMode mode
+
+-- | open a new buffer for interaction with a process, using any interactive-derived mode
+spawnProcessMode :: Mode syntax -> FilePath -> [String] -> YiM BufferRef
+spawnProcessMode interMode cmd args = do
     b <- startSubprocess cmd args (const $ return ())
     withEditor $ interactHistoryStart
-    mode' <- lookupMode $ AnyMode mode
+    mode' <- lookupMode $ AnyMode interMode
     withBuffer $ do m1 <- getMarkB (Just "StdERR")
                     m2 <- getMarkB (Just "StdOUT")
                     modifyMarkB m1 (\v -> v {markGravity = Backward})
                     modifyMarkB m2 (\v -> v {markGravity = Backward})
                     setAnyMode mode'
     return b
+
+
 
 -- | Send the type command to the process
 feedCommand :: YiM ()

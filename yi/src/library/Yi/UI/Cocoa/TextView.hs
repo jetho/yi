@@ -20,8 +20,8 @@ module Yi.UI.Cocoa.TextView
   , visibleRange
   )where
 
-import Prelude ()
-import Yi.Prelude
+
+
 import Yi.String
 import Yi.Buffer hiding (runBuffer)
 import Yi.UI.Cocoa.Utils
@@ -133,7 +133,7 @@ ytv_performDragOperation dragInfo slf = do
 
     runbuf <- slf #. _runBuffer
     runbuf $ do
-      hasSel <- getA highlightSelectionA
+      hasSel <- use highlightSelectionA
       rSel <- if hasSel && src == (castObject slf) then getSelectRegionB else return emptyRegion
 
       moveTo $ fromIntegral pIns

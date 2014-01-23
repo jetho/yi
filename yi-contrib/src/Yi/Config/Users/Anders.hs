@@ -1,6 +1,7 @@
 module Yi.Config.Users.Anders (config) where
 
-import Yi hiding (Block, (.))
+import Control.Lens
+import Yi hiding (Block)
 import qualified Yi.Mode.Haskell as H
 import Yi.Hoogle (hoogle)
 import Yi.String (mapLines)
@@ -34,7 +35,7 @@ main = yi $ config
 haskellModeHooks mode =
    mode { modeName = "my " ++ modeName mode
         , modeKeymap =
-            topKeymapA ^: ((ctrlCh 'c' ?>> 
+            topKeymapA %~ ((ctrlCh 'c' ?>> 
                             choice [ ctrlCh 'l' ?>>! H.ghciLoadBuffer
                                    , ctrl (char 'z') ?>>! H.ghciGet
                                    , ctrl (char 'h') ?>>! hoogle

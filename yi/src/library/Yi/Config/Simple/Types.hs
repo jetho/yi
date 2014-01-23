@@ -1,20 +1,23 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Rank2Types #-}
 
 -- | exports from "Yi.Config.Simple" which are useful to \"core yi\" rather than just config files.
 module Yi.Config.Simple.Types
  where
 
-import Prelude()
-import Yi.Prelude
+import Control.Monad.State hiding (modify, get)
+import Control.Applicative
+import Control.Lens
 import Yi.Config
 import Yi.Dynamic
-import Control.Monad.State hiding (modify, get)
 
 -- | The configuration monad. Run it with 'configMain'.
-newtype ConfigM a = ConfigM { runConfigM :: StateT Config IO a } deriving(Monad, Functor, Applicative, MonadState Config, MonadIO)
+newtype ConfigM a = ConfigM {
+    runConfigM :: StateT Config IO a
+  } deriving (Monad, Functor, Applicative, MonadState Config, MonadIO)
 
--- | Fields that can be modified with ('%='), 'get' and 'modify'.
-type Field a = Accessor Config a
+-- | Fields that can be modified with all lens machinery.
+type Field a = Lens' Config a
 
 {- | Accessor for any 'YiConfigVariable', to be used by modules defining
 'YiConfigVariable's. Such modules should provide a custom-named field.
@@ -32,4 +35,4 @@ userName = unUserNameA '.' 'customVariable'@
 Here, the hypothetical library would provide the field @userName@ to be used in preference to @customVariable@.
 -}
 customVariable :: YiConfigVariable a => Field a
-customVariable = configVariableA . configVarsA
+customVariable = configVarsA . configVariableA

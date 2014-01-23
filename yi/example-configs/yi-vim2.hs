@@ -1,4 +1,3 @@
-import Prelude ()
 import Yi
 import Yi.Keymap.Vim
 import qualified Yi.Keymap.Vim2 as V2
@@ -24,7 +23,7 @@ myKeymapSet = V2.mkKeymapSet $ V2.defVimConfig `override` \super this ->
     let eval = V2.pureEval this
     in super {
           -- Here we can add custom bindings.
-          -- See Yi.Keymap.Vim2.Common for datatypes and 
+          -- See Yi.Keymap.Vim2.Common for datatypes and
           -- Yi.Keymap.Vim2.Utils for useful functions like mkStringBindingE
 
           -- In case of conflict, that is if there exist multiple bindings
@@ -37,6 +36,10 @@ myKeymapSet = V2.mkKeymapSet $ V2.defVimConfig `override` \super this ->
 myBindings :: (String -> EditorM ()) -> [V2.VimBinding]
 myBindings eval =
     let nmap x y = V2.mkStringBindingE V2.Normal V2.Drop (x, y, id)
+        imap x y = V2.VimBindingE (\evs state -> case V2.vsMode state of
+                                    V2.Insert _ -> evs `V2.matchesString` x
+                                    _ -> V2.NoMatch)
+                                  (\_evs -> y >> return V2.Continue)
     in [
          -- Tab traversal
          nmap "<C-h>" previousTabE
@@ -52,6 +55,9 @@ myBindings eval =
        , nmap "<F3>" (withBuffer0 deleteTrailingSpaceB)
        , nmap "<F4>" (withBuffer0 moveToSol)
        , nmap "<F1>" (withBuffer0 readCurrentWordB >>= printMsg)
+
+       , imap "<Home>" (withBuffer0 moveToSol)
+       , imap "<End>" (withBuffer0 moveToEol)
        ]
 
 myModes = [

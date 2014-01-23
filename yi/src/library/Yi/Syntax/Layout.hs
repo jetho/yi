@@ -5,10 +5,8 @@ module Yi.Syntax.Layout (layoutHandler, State) where
 
 import Yi.Syntax
 import Yi.Lexer.Alex
-import Yi.Prelude
-import Prelude ()
 import Data.Maybe (isJust)
-import Data.List (dropWhile)
+import Data.List (find)
 
 data BlockOpen t = Indent Int -- block opened because of indentation; parameter is the column of it.
                  | Paren t      -- block opened because of parentheses

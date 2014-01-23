@@ -1,5 +1,6 @@
 module Yi.Config.Users.Gwern (config) where
 
+import Control.Lens
 import Yi
 import Yi.Hoogle (hoogle)
 import Yi.Keymap.Emacs (defKeymap, eKeymap, mkKeymap)
@@ -17,7 +18,7 @@ config = defaultEmacsConfig
           -- bestHaskellMode :: Mode (Tree (Tok Token))
           bestHaskellMode = -- Shim.minorMode $
                              H.cleverMode { modeKeymap =
-                                    topKeymapA ^: ((ctrlCh 'c' ?>> choice [ctrlCh 'l' ?>>! H.ghciLoadBuffer,
+                                    topKeymapA %~ ((ctrlCh 'c' ?>> choice [ctrlCh 'l' ?>>! H.ghciLoadBuffer,
                                                               ctrl (char 'z') ?>>! H.ghciGet,
                                                               ctrl (char 'h') ?>>! hoogle,
                                                               ctrlCh 'r' ?>>! H.ghciSend ":r",

@@ -11,7 +11,9 @@ module Yi.Keymap.Emacs (keymap,
                         mkKeymap,
                         defKeymap,
                         ModeMap(..)) where
-import Prelude ()
+
+import Control.Applicative
+import Control.Lens
 import Data.Prototype
 import Yi.Command (shellCommandE)
 import Yi.Core
@@ -87,7 +89,7 @@ completionKm caseSensitive = do void $ some ((meta (char '/') ?>>! wordComplete'
 
 placeMark :: BufferM ()
 placeMark = do
-  putA highlightSelectionA True
+  assign highlightSelectionA True
   pointB >>= setSelectionMarkPointB
 
 selectAll ::BufferM()
@@ -254,11 +256,11 @@ emacsKeys univArg =
                  , ctrlCh 'b'    ?>>! listBuffers
                  , ctrlCh 'c'    ?>>! askQuitEditor
                  , ctrlCh 'f'    ?>>! findFile
-                 , ctrlCh 'q'    ?>>! (withBuffer0 $ modA readOnlyA not)
+                 , ctrlCh 'q'    ?>>! (withBuffer0 $ (%=) readOnlyA not)
                  , ctrlCh 's'    ?>>! fwriteE
                  , ctrlCh 'w'    ?>>! promptFile "Write file:" fwriteToE
                  , ctrlCh 'x'    ?>>! (exchangePointAndMarkB >>
-                                       putA highlightSelectionA True)
+                                       assign highlightSelectionA True)
                  , char 'b'      ?>>! switchBufferE
                  , char 'd'      ?>>! dired
                  , char 'e' ?>>

@@ -31,17 +31,19 @@ module Yi.UI.Pango.Control (
 ,   keyTable
 ) where
 
-import Prelude (map)
-
+import Prelude hiding (concatMap, concat, foldl, elem, mapM_)
 import Control.Exception (catch)
-import Control.Monad (void)
+import Control.Monad        hiding (mapM_, forM_)
+import Control.Monad.Reader hiding (mapM_, forM_)
+import Control.Applicative
+import Control.Lens hiding (moveTo, views, Action)
+import Data.Foldable
 import Data.Maybe (maybe, fromJust)
 import Data.IORef
 import Data.List (nub, filter, drop, zip, take, length)
 import Data.Prototype
 import qualified Data.Rope as Rope
 import qualified Data.Map as Map
-import Yi.Prelude
 import Yi.Core (startEditor, focusAllSyntax)
 import Yi.Buffer
 import Yi.Config
@@ -53,6 +55,8 @@ import Yi.Keymap hiding(withBuffer)
 import Yi.Monad
 import Yi.Style
 import Yi.UI.Utils
+import Yi.Utils
+import Yi.Debug
 import Graphics.UI.Gtk as Gtk
        (Color(..), PangoRectangle(..), Rectangle(..), selectionDataSetText,
         targetString, clipboardSetWithData, clipboardRequestText,
@@ -229,7 +233,7 @@ doLayout e = do
     cacheRef <- asks tabCache
     tabs <- liftIO $ readRef cacheRef
     heights <- concat <$> mapM (getHeightsInTab e) tabs
-    let e' = (tabsA ^: fmap (mapWindows updateWin)) e
+    let e' = (tabsA %~ fmap (mapWindows updateWin)) e
         updateWin w = case find (\(ref,_,_) -> (wkey w == ref)) heights of
                           Nothing -> w
                           Just (_,h,rgn) -> w { height = h, winRegion = rgn }
@@ -479,7 +483,7 @@ newView buffer font = do
                     }) $ liftYi $ withEditor $ newWindowE False viewFBufRef
     let windowRef = wkey newWindow
     liftYi $ withEditor $ do
-        modA windowsA (PL.insertRight newWindow)
+        (%=) windowsA (PL.insertRight newWindow)
         e <- get
         put $ focusAllSyntax e
     drawArea <- liftIO $ drawingAreaNew
@@ -532,7 +536,7 @@ newView buffer font = do
         (text, allAttrs, debug, tos, rel, point, inserting) <-
           runControl (liftYi $ withEditor $ do
             window <- (findWindowWith windowRef) <$> get
-            modA buffersA (fmap (clearSyntax . clearHighlight))
+            (%=) buffersA (fmap (clearSyntax . clearHighlight))
             let winh = height window
             let tos = max 0 (regionStart (winRegion window))
             let bos = regionEnd (winRegion window)
@@ -542,7 +546,7 @@ newView buffer font = do
                 -- tos       <- getMarkPointB =<< fromMark <$> askMarks
                 rope      <- streamB Forward tos
                 point     <- pointB
-                inserting <- getA insertingA
+                inserting <- use insertingA
 
                 modeNm <- gets (withMode0 modeName)
 
@@ -635,9 +639,9 @@ newView buffer font = do
   where
     clearHighlight fb =
       -- if there were updates, then hide the selection.
-      let h = getVal highlightSelectionA fb
-          us = getVal pendingUpdatesA fb
-      in highlightSelectionA ^= (h && null us) $ fb
+      let h = view highlightSelectionA fb
+          us = view pendingUpdatesA fb
+      in highlightSelectionA .~ (h && null us) $ fb
 
 setBufferMode :: FilePath -> Buffer -> ControlM ()
 setBufferMode f buffer = do
@@ -708,7 +712,7 @@ handleClick view event = do
 
 --  let focusWindow = do
       -- TODO: check that tabIdx is the focus?
---      modA windowsA (fromJust . PL.move winIdx)
+--      (%=) windowsA (fromJust . PL.move winIdx)
 
   liftIO $ case (Gdk.Events.eventClick event, Gdk.Events.eventButton event) of
      (Gdk.Events.SingleClick, Gdk.Events.LeftButton) -> do

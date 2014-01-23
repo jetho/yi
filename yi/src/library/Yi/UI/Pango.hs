@@ -12,16 +12,20 @@
 
 module Yi.UI.Pango (start) where
 
-import Prelude (filter)
-
+import Prelude hiding (error, elem, mapM_, foldl, concat, mapM)
 import Control.Exception (catch, SomeException)
 import Control.Concurrent
+import Control.Monad hiding (forM_, mapM_, forM, mapM)
+import Control.Applicative
+import Control.Lens hiding (moveTo, set, Action, from)
 import Data.Prototype
 import Data.IORef
-import Data.List (drop, intercalate, zip)
+import Data.List (intercalate)
 import qualified Data.List.PointedList as PL (moveTo)
 import qualified Data.List.PointedList.Circular as PL
 import Data.Maybe
+import Data.Foldable
+import Data.Traversable
 import qualified Data.Map as M
 import qualified Data.Rope as Rope
 
@@ -33,8 +37,6 @@ import qualified Graphics.UI.Gtk as Gtk
 import qualified Graphics.UI.Gtk.Gdk.GC as Gtk
 import System.Glib.GError
 
-import Yi.Prelude hiding (on)
-
 import Yi.Buffer
 import Yi.Config
 import Yi.Editor
@@ -44,6 +46,9 @@ import Yi.Layout(DividerPosition, DividerRef)
 import Yi.Style
 import Yi.Tab
 import Yi.Window
+import Yi.Utils
+import Yi.Monad
+import Yi.Debug
 
 import qualified Yi.UI.Common as Common
 import Yi.UI.Pango.Layouts
@@ -220,7 +225,7 @@ startNoMsg cfg ch outCh ed = do
       runAction = uiActionCh ui . makeAction
   -- why does this cause a hang without postGUIAsync?
   simpleNotebookOnSwitchPage (uiNotebook ui) $ \n -> postGUIAsync $
-    runAction (modA tabsA (move n) :: EditorM ())
+    runAction ((%=) tabsA (move n) :: EditorM ())
 
   return (mkUI ui)
 
@@ -283,8 +288,7 @@ updateWindow :: Editor -> UI -> Window -> WinInfo -> IO ()
 updateWindow e _ui win wInfo = do
     writeIORef (inFocus wInfo) False -- see also 'setWindowFocus'
     writeIORef (coreWin wInfo) win
-    writeIORef (insertingMode wInfo)
-      (askBuffer win (findBufferWith (bufkey win) e) $ getA insertingA)
+    writeIORef (insertingMode wInfo) (askBuffer win (findBufferWith (bufkey win) e) $ use insertingA)
 
 setWindowFocus :: Editor -> UI -> TabInfo -> WinInfo -> IO ()
 setWindowFocus e ui t w = do
@@ -548,7 +552,7 @@ doLayout ui e = do
     tabs <- readRef $ tabCache ui
     f <- readRef (uiFont ui)
     heights <- fold <$> mapM (getHeightsInTab ui f e) tabs
-    let e' = (tabsA ^: fmap (mapWindows updateWin)) e
+    let e' = (tabsA %~ fmap (mapWindows updateWin)) e
         updateWin w = case M.lookup (wkey w) heights of
                           Nothing -> w
                           Just (h,rgn) -> w { height = h, winRegion = rgn }

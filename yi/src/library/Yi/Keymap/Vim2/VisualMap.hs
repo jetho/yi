@@ -2,11 +2,12 @@ module Yi.Keymap.Vim2.VisualMap
   ( defVisualMap
   ) where
 
-import Yi.Prelude
-import Prelude ()
+import Control.Applicative
+import Control.Monad
+import Control.Lens hiding (moveTo,(-~),op)
 
 import Data.Char (ord)
-import Data.List (drop, group, length, reverse)
+import Data.List (group)
 import Data.Maybe (fromJust)
 
 import Yi.Buffer hiding (Insert)
@@ -17,6 +18,8 @@ import Yi.Keymap.Vim2.StateUtils
 import Yi.Keymap.Vim2.StyledRegion
 import Yi.Keymap.Vim2.Utils
 import Yi.MiniBuffer
+import Yi.Utils
+import Yi.Monad
 
 defVisualMap :: [VimOperator] -> [VimBinding]
 defVisualMap operators =
@@ -35,7 +38,7 @@ escBinding = VimBindingE prereq action
               clrStatus
               withBuffer0 $ do
                   setVisibleSelection False
-                  putA regionStyleA Inclusive
+                  assign regionStyleA Inclusive
               switchModeE Normal
               return Drop
 
@@ -94,8 +97,8 @@ changeVisualStyleBinding = VimBindingE prereq action
               else do
                   modifyStateE $ \s -> s { vsMode = newMode }
                   withBuffer0 $ do
-                      putA regionStyleA newStyle
-                      putA rectangleSelectionA $ Block == newStyle
+                      assign regionStyleA newStyle
+                      assign rectangleSelectionA $ Block == newStyle
                       setVisibleSelection True
                   return Finish
 
@@ -182,7 +185,7 @@ mkOperatorBinding op = VimBindingE prereq action
               clrStatus
               withBuffer0 $ do
                   setVisibleSelection False
-                  putA regionStyleA Inclusive
+                  assign regionStyleA Inclusive
               return token
 
 replaceBinding :: VimBinding

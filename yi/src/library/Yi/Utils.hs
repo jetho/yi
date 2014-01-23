@@ -1,116 +1,19 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+-- Unique code from Yi.Prelude
 
-module Yi.Prelude
-    (
-(<>),
-(++), -- consider scrapping this and replacing it by the above
-(=<<),
-(<=<),
-($!),
-Double,
-Binary,
-Char,
-Either(..),
-Eq(..),
-Fractional(..),
-Functor(..),
-IO,
-Integer,
-Integral(..),
-Bounded(..),
-Enum(..),
-Maybe(..),
-Monad(..),
-Num(..),
-Ord(..),
-Read(..),
-Real(..),
-RealFrac(..),
-ReaderT(..),
-SemiNum(..),
-String,
-Typeable,
-commonPrefix,
-void,
-dummyPut,
-dummyGet,
-findPL,
-focusA,
-fromIntegral,
-fst,
-fst3,
-groupBy',
-list,
-head,
-init,
-io,
-last,
-lookup,
-mapAdjust',
-mapAlter',
-mapFromFoldable,
-module Control.Applicative,
-module Control.Category,
-module Data.Accessor,
-module Data.Accessor.Monad.MTL.State, putA, getA, modA,
-module Data.Bool,
-module Data.Foldable,
-module Data.Function,
-module Data.Int,
-module Data.Rope,
-module Data.Traversable,
-module Text.Show,
-module Yi.Debug,
-module Yi.Monad,
-nubSet,
-null,
-print,
-putStrLn,
-replicate,
-read,
-seq,
-singleton,
-snd,
-snd3,
-swapFocus,
-tail,
-trd3,
-undefined,
-unlines,
-when,
-writeFile -- because Data.Derive uses it.
-    ) where
+module Yi.Utils where
 
-import Prelude hiding (any, all)
-import Yi.Debug
-import Yi.Monad
-import Text.Show
-import Data.Bool
 import Data.Binary
-import Data.Foldable
+import Data.Foldable hiding (all,any)
 import Data.Default
-import Data.Function hiding ((.), id)
 import qualified Data.HashMap.Strict as HashMap
 import Data.Hashable(Hashable)
-import Data.Int
-import Data.Rope (Rope)
-import Control.Category
 import Control.Monad.Reader
-import Control.Applicative hiding((<$))
-import Data.Traversable
-import Data.Typeable
-import Data.Monoid (Monoid, mappend)
+import Control.Applicative
+import Control.Lens hiding (cons)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import qualified Control.Monad.State.Class as CMSC
-import qualified Data.Accessor.Basic as Accessor
-import Data.Accessor ((<.), accessor, getVal, setVal, Accessor,(^.),(^:),(^=))
-import qualified Data.Accessor.Monad.MTL.State as Accessor.MTL
-import Data.Accessor.Monad.MTL.State ((%:), (%=))
 import qualified Data.List.PointedList as PL
-
-(<>) :: Monoid a => a -> a -> a
-(<>) = mappend
 
 io :: MonadIO m => IO a -> m a
 io = liftIO
@@ -135,8 +38,8 @@ singleton x = [x]
 
 -- 'list' is the canonical list destructor as 'either' or 'maybe'.
 list :: b -> (a -> [a] -> b) -> [a] -> b
-list nil _    []     = nil
-list _   cons (x:xs) = cons x xs
+list nil _     []     = nil
+list _   cons' (x:xs) = cons' x xs
 
 -- TODO: move somewhere else.
 -- | As 'Prelude.nub', but with O(n*log(n)) behaviour.
@@ -152,17 +55,6 @@ mapAdjust' f = Map.alter f' where
     f' (Just x) = let x' = f x in x' `seq` Just x'
     -- This works because Map is structure-strict, and alter needs to force f' to compute
     -- the structure.
-
-
--- | As Map.alter, but the newly inserted element is forced with the map.
-mapAlter' :: Ord k => (Maybe a -> Maybe a) -> k -> Map.Map k a -> Map.Map k a
-mapAlter' f = Map.alter f' where
-    f' arg = case f arg of
-        Nothing -> Nothing
-        Just x -> x `seq` Just x
-    -- This works because Map is structure-strict, and alter needs to force f' to compute
-    -- the structure.
-
 
 -- | Generalisation of 'Map.fromList' to arbitrary foldables.
 mapFromFoldable :: (Foldable t, Ord k) => t (k, a) -> Map.Map k a
@@ -189,10 +81,6 @@ chain q (e1 : es@(e2 : _))
     | q e1 e2 = let (s1, s2) = chain q es in (e1 : s1, s2)
     | otherwise = ([e1], es)
 
-----------------------
--- Accessors support
-
-
 -- | Return the longest common prefix of a set of lists.
 --
 -- > P(xs) === all (isPrefixOf (commonPrefix xs)) xs
@@ -216,25 +104,13 @@ findPL p xs = go [] xs where
   go ls (f:rs) | p f    = Just (PL.PointedList ls f rs)
                | otherwise = go (f:ls) rs
 
-focusA :: Accessor (PL.PointedList a) a
-focusA = accessor getter setter where
-  getter   (PL.PointedList _ x _) = x
-  setter y (PL.PointedList x _ z) = PL.PointedList x y z
-
 -- | Given a function which moves the focus from index A to index B, return a function which swaps the elements at indexes A and B and then moves the focus. See Yi.Editor.swapWinWithFirstE for an example.
 swapFocus :: (PL.PointedList a -> PL.PointedList a) -> (PL.PointedList a -> PL.PointedList a)
-swapFocus moveFocus xs = focusA ^= (xs ^. focusA) $ moveFocus $ focusA ^= (moveFocus xs ^. focusA) $ xs
-----------------------
--- Acessor stuff
-
-putA :: CMSC.MonadState r m => Accessor.T r a -> a -> m ()
-putA = Accessor.MTL.set
-
-getA :: CMSC.MonadState r m => Accessor.T r a -> m a
-getA = Accessor.MTL.get
-
-modA :: CMSC.MonadState r m => Accessor.T r a -> (a -> a) -> m ()
-modA = Accessor.MTL.modify
+swapFocus moveFocus xs =
+    let xs' = moveFocus xs
+        f1  = view PL.focus xs
+        f2  = view PL.focus xs'
+    in set PL.focus f1 . moveFocus . set PL.focus f2 $ xs
 
 -- | Write nothing. Use with 'dummyGet'
 dummyPut :: a -> Put
@@ -249,3 +125,5 @@ instance (Eq k, Hashable k, Binary k, Binary v) => Binary (HashMap.HashMap k v) 
     put x = put (HashMap.toList x)
     get = HashMap.fromList <$> get
 
+makeLensesWithSuffix s =
+  makeLensesWith (defaultRules & lensField .~ Just . (++s))

@@ -15,7 +15,6 @@ module Yi.Core
     -- * Keymap
   , module Yi.Keymap
 
-  , module Yi.Prelude
   , module Yi.Editor
   , module Yi.Buffer
   , module Yi.Keymap.Keys
@@ -47,15 +46,17 @@ module Yi.Core
   )
 where
 
-import Prelude (realToFrac)
-
+import Prelude hiding (elem,or,mapM_)
 import Control.Concurrent
-import Control.Monad (forever)
+import Control.Monad hiding (mapM_,forM_,forM)
 import Control.Monad.Error ()
-import Control.Monad.Reader (ask)
-import Control.Monad.Trans
+import Control.Monad.Reader hiding (mapM_,forM_,forM)
 import Control.Exception
 import Control.Exc
+import Control.Applicative
+import Control.Lens hiding (Action,act,acts)
+import Data.Foldable
+import Data.Traversable
 import qualified Data.DelayList as DelayList
 import Data.List (intercalate, partition)
 import Data.List.Split (splitOn)
@@ -68,7 +69,6 @@ import Data.Time.Clock.POSIX
 import qualified Data.Rope as R
 import System.Directory (doesFileExist)
 import System.Exit
-import System.FilePath
 import System.IO (Handle, hWaitForInput, hPutStr)
 import System.PosixCompat.Files
 import System.Process (terminateProcess, getProcessExitCode, ProcessHandle, readProcessWithExitCode)
@@ -80,10 +80,12 @@ import Yi.Editor
 import Yi.Keymap
 import Yi.Keymap.Keys
 import Yi.KillRing (krEndCmd)
-import Yi.Prelude
+import Yi.Utils
 import Yi.Process (createSubprocess, readAvailable, SubprocessId, SubprocessInfo(..))
 import Yi.String
 import Yi.Style (errorStyle, strongHintStyle)
+import Yi.Monad
+import Yi.Debug
 import qualified Yi.UI.Common as UI
 import Yi.Window (dummyWindow, bufkey, wkey, winRegion)
 import {-# source #-} Yi.PersistentState(loadPersistentState, savePersistentState)
@@ -92,11 +94,11 @@ import {-# source #-} Yi.PersistentState(loadPersistentState, savePersistentStat
 -- UI will be refreshed.
 interactive :: [Action] -> YiM ()
 interactive action = do
-  evs <- withEditor $ getA pendingEventsA
+  evs <- withEditor $ use pendingEventsA
   logPutStrLn $ ">>> interactively" ++ showEvs evs
-  withEditor $ modA buffersA (fmap $  undosA ^: addChangeU InteractivePoint)
+  withEditor $ (%=) buffersA (fmap $  undosA %~ addChangeU InteractivePoint)
   mapM_ runAction action
-  withEditor $ modA killringA krEndCmd
+  withEditor $ (%=) killringA krEndCmd
   refreshEditor
   logPutStrLn "<<<"
   return ()
@@ -130,7 +132,7 @@ startEditor cfg st = do
 
     runYi $ do if isNothing st
                     then postActions $ startActions cfg -- process options if booting for the first time
-                    else withEditor $ modA buffersA (fmap (recoverMode (modeTable cfg))) -- otherwise: recover the mode of buffers
+                    else withEditor $ (%=) buffersA (fmap (recoverMode (modeTable cfg))) -- otherwise: recover the mode of buffers
                postActions $ initialActions cfg ++ [makeAction showErrors]
 
     runYi refreshEditor
@@ -159,11 +161,11 @@ showErrors = withEditor $ do
 dispatch :: Event -> YiM ()
 dispatch ev =
     do yi <- ask
-       entryEvs <- withEditor $ getA pendingEventsA
+       entryEvs <- withEditor $ use pendingEventsA
        logPutStrLn $ "pending events: " ++ showEvs entryEvs
        (userActions,_p') <- withBuffer $ do
          keymap <- gets (withMode0 modeKeymap)
-         p0 <- getA keymapProcessA
+         p0 <- use keymapProcessA
          let km = extractTopKeymap $ keymap $ defaultKm $ yiConfig $ yi
          let freshP = Chain (configInputPreprocess $ yiConfig $ yi) (mkAutomaton km)
              p = case computeState p0 of
@@ -174,10 +176,10 @@ dispatch ev =
              ambiguous = case state of
                  Ambiguous _ -> True
                  _ -> False
-         putA keymapProcessA (if ambiguous then freshP else p')
+         assign keymapProcessA (if ambiguous then freshP else p')
          let actions0 = case state of
                           Dead -> [makeAction $ do
-                                         evs <- getA pendingEventsA
+                                         evs <- use pendingEventsA
                                          printMsg ("Unrecognized input: " ++ showEvs (evs ++ [ev]))]
                           _ -> actions
              actions1 = if ambiguous
@@ -188,11 +190,11 @@ dispatch ev =
        -- logPutStrLn $ "Actions posted:" ++ show userActions
        -- logPutStrLn $ "New automation: " ++ show _p'
        let decay, pendingFeedback :: EditorM ()
-           decay = modA statusLinesA (DelayList.decrease 1)
-           pendingFeedback = do modA pendingEventsA (++ [ev])
+           decay = (%=) statusLinesA (DelayList.decrease 1)
+           pendingFeedback = do (%=) pendingEventsA (++ [ev])
                                 if null userActions
-                                    then printMsg . showEvs =<< getA pendingEventsA
-                                    else putA pendingEventsA []
+                                    then printMsg . showEvs =<< use pendingEventsA
+                                    else assign pendingEventsA []
        postActions $ [makeAction decay] ++ userActions ++ [makeAction pendingFeedback]
 
 showEvs = intercalate " " . fmap prettyEvent
@@ -233,7 +235,7 @@ checkFileChanges e0 = do
           else nothing
         -- show appropriate update message if applicable
         return $ case getFirst (foldMap (First . snd) newBuffers) of
-               Just msg -> (statusLinesA ^: DelayList.insert msg) e0 {buffers = fmap fst newBuffers}
+               Just msg -> (statusLinesA %~ DelayList.insert msg) e0 {buffers = fmap fst newBuffers}
                Nothing -> e0
     where msg1 = (1, (["File was changed by a concurrent process, reloaded!"], strongHintStyle))
           msg2 = (1, (["Disk version changed by a concurrent process"], strongHintStyle))
@@ -243,18 +245,18 @@ checkFileChanges e0 = do
 
 -- | Hide selection, clear "syntax dirty" flag (as appropriate).
 clearAllSyntaxAndHideSelection :: Editor -> Editor
-clearAllSyntaxAndHideSelection = buffersA ^: (fmap (clearSyntax . clearHighlight))
+clearAllSyntaxAndHideSelection = buffersA %~ (fmap (clearSyntax . clearHighlight))
   where
     clearHighlight fb =
       -- if there were updates, then hide the selection.
-      let h = getVal highlightSelectionA fb
-          us = getVal pendingUpdatesA fb
-      in highlightSelectionA ^= (h && null us) $ fb
+      let h = view highlightSelectionA fb
+          us = view pendingUpdatesA fb
+      in highlightSelectionA .~ (h && null us) $ fb
 
 
 -- Focus syntax tree on the current window, for all visible buffers.
 focusAllSyntax :: Editor -> Editor
-focusAllSyntax e6 = buffersA ^: (fmap (\b -> focusSyntax (regions b) b)) $ e6
+focusAllSyntax e6 = buffersA %~ (fmap (\b -> focusSyntax (regions b) b)) $ e6
     where regions b = M.fromList [(wkey w, winRegion w) | w <- toList $ windows e6, bufkey w == bkey b]
           -- Why bother filtering the region list? After all the trees are lazily computed.
           -- Answer: focusing is an incremental algorithm. Each "focused" path depends on the previous one.
@@ -268,7 +270,7 @@ refreshEditor :: YiM ()
 refreshEditor = onYiVar $ \yi var -> do
         let cfg = yiConfig yi
             runOnWins a = runEditor cfg
-                                    (do ws <- getA windowsA
+                                    (do ws <- use windowsA
                                         forM ws $ flip withWindowE a)
             style = configScrollStyle $ configUI $ cfg
         let scroll e3 = let (e4, relayout) = runOnWins (snapScreenB style) e3 in
@@ -286,14 +288,14 @@ refreshEditor = onYiVar $ \yi var -> do
              pureM (fst . runOnWins snapInsB) >>=
              pureM focusAllSyntax >>=
              -- Clear "pending updates" and "followUp" from buffers.
-             pureM (buffersA ^: (fmap (clearUpdates . clearFollow)))
+             pureM (buffersA %~ (fmap (clearUpdates . clearFollow)))
         -- Display the new state of the editor
         UI.refresh (yiUi yi) e7
         -- Terminate stale processes.
         terminateSubprocesses (staleProcess $ buffers e7) yi var {yiEditor = e7}
   where
-    clearUpdates = pendingUpdatesA ^= []
-    clearFollow = pointFollowsWindowA ^= const False
+    clearUpdates = pendingUpdatesA .~ []
+    clearFollow = pointFollowsWindowA .~ const False
     -- | Is this process stale? (associated with a deleted buffer)
     staleProcess bs p = not (bufRef p `M.member` bs)
 
@@ -349,8 +351,8 @@ errorEditor s = do withEditor $ printStatus (["error: " ++ s], errorStyle)
 -- (Not possible since the windowset type disallows it -- should it be relaxed?)
 closeWindow :: YiM ()
 closeWindow = do
-    winCount <- withEditor $ getsA windowsA PL.length
-    tabCount <- withEditor $ getsA tabsA PL.length
+    winCount <- withEditor $ uses windowsA PL.length
+    tabCount <- withEditor $ uses tabsA PL.length
     when (winCount == 1 && tabCount == 1) quitEditor
     withEditor $ tryCloseE
 
