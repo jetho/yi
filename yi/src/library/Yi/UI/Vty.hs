@@ -37,7 +37,7 @@ import qualified Yi.UI.Common as Common
 import Yi.Config
 import Yi.Window
 import Yi.Style as Style
-import Graphics.Vty as Vty hiding (refresh, Default, text)
+import Graphics.Vty as Vty hiding (Config(..), refresh, Default, text)
 import qualified Graphics.Vty as Vty
 import Yi.Keymap (makeAction, YiM)
 import Yi.Debug
@@ -78,7 +78,7 @@ start :: UIBoot
 start cfg ch outCh editor = do
   liftIO $ do
           oattr <- getTerminalAttributes stdInput
-          v <- mkVtyEscDelay $ configVtyEscDelay $ configUI $ cfg
+          v <- mkVty $ configVty $ configUI $ cfg
           nattr <- getTerminalAttributes stdInput
           setTerminalAttributes stdInput (withoutMode nattr ExtendedFunctions) Immediately
           -- remove the above call to setTerminalAttributes when vty does it.
@@ -151,28 +151,28 @@ fromVtyEvent _ = error "fromVtyEvent: unsupported event encountered."
 
 
 fromVtyKey :: Vty.Key -> Yi.Event.Key
-fromVtyKey (Vty.KEsc     ) = Yi.Event.KEsc
-fromVtyKey (Vty.KFun x   ) = Yi.Event.KFun x
-fromVtyKey (Vty.KPrtScr  ) = Yi.Event.KPrtScr
-fromVtyKey (Vty.KPause   ) = Yi.Event.KPause
-fromVtyKey (Vty.KASCII '\t') = Yi.Event.KTab
-fromVtyKey (Vty.KASCII c ) = Yi.Event.KASCII c
-fromVtyKey (Vty.KBS      ) = Yi.Event.KBS
-fromVtyKey (Vty.KIns     ) = Yi.Event.KIns
-fromVtyKey (Vty.KHome    ) = Yi.Event.KHome
-fromVtyKey (Vty.KPageUp  ) = Yi.Event.KPageUp
-fromVtyKey (Vty.KDel     ) = Yi.Event.KDel
-fromVtyKey (Vty.KEnd     ) = Yi.Event.KEnd
-fromVtyKey (Vty.KPageDown) = Yi.Event.KPageDown
-fromVtyKey (Vty.KNP5     ) = Yi.Event.KNP5
-fromVtyKey (Vty.KUp      ) = Yi.Event.KUp
-fromVtyKey (Vty.KMenu    ) = Yi.Event.KMenu
-fromVtyKey (Vty.KLeft    ) = Yi.Event.KLeft
-fromVtyKey (Vty.KDown    ) = Yi.Event.KDown
-fromVtyKey (Vty.KRight   ) = Yi.Event.KRight
-fromVtyKey (Vty.KEnter   ) = Yi.Event.KEnter
-fromVtyKey (Vty.KBackTab ) = error "This should be handled in fromVtyEvent"
-fromVtyKey (Vty.KBegin   ) = error "Yi.UI.Vty.fromVtyKey: can't handle KBegin"
+fromVtyKey (Vty.KEsc      ) = Yi.Event.KEsc
+fromVtyKey (Vty.KFun x    ) = Yi.Event.KFun x
+fromVtyKey (Vty.KPrtScr   ) = Yi.Event.KPrtScr
+fromVtyKey (Vty.KPause    ) = Yi.Event.KPause
+fromVtyKey (Vty.KChar '\t') = Yi.Event.KTab
+fromVtyKey (Vty.KChar c   ) = Yi.Event.KASCII c
+fromVtyKey (Vty.KBS       ) = Yi.Event.KBS
+fromVtyKey (Vty.KIns      ) = Yi.Event.KIns
+fromVtyKey (Vty.KHome     ) = Yi.Event.KHome
+fromVtyKey (Vty.KPageUp   ) = Yi.Event.KPageUp
+fromVtyKey (Vty.KDel      ) = Yi.Event.KDel
+fromVtyKey (Vty.KEnd      ) = Yi.Event.KEnd
+fromVtyKey (Vty.KPageDown ) = Yi.Event.KPageDown
+fromVtyKey (Vty.KCenter   ) = Yi.Event.KNP5
+fromVtyKey (Vty.KUp       ) = Yi.Event.KUp
+fromVtyKey (Vty.KMenu     ) = Yi.Event.KMenu
+fromVtyKey (Vty.KLeft     ) = Yi.Event.KLeft
+fromVtyKey (Vty.KDown     ) = Yi.Event.KDown
+fromVtyKey (Vty.KRight    ) = Yi.Event.KRight
+fromVtyKey (Vty.KEnter    ) = Yi.Event.KEnter
+fromVtyKey (Vty.KBackTab  ) = error "This should be handled in fromVtyEvent"
+fromVtyKey (Vty.KBegin    ) = error "Yi.UI.Vty.fromVtyKey: can't handle KBegin"
 
 fromVtyMod :: Vty.Modifier -> Yi.Event.Modifier
 fromVtyMod Vty.MShift = Yi.Event.MShift
