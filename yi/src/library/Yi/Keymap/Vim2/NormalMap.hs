@@ -5,7 +5,6 @@ module Yi.Keymap.Vim2.NormalMap
 import Control.Monad
 import Control.Applicative
 import Control.Lens hiding (re)
-import System.Directory (doesFileExist)
 
 import Data.Char
 import Data.List (group)
@@ -31,8 +30,6 @@ import Yi.Regex (seInput, makeSearchOptsM)
 import Yi.Search (getRegexE, isearchInitE, setRegexE, makeSimpleSearch)
 import Yi.Monad
 import Yi.Keymap
-import Yi.File (editFile)
-import Yi.Utils (io)
 
 mkDigitBinding :: Char -> VimBinding
 mkDigitBinding c = mkBindingE Normal Continue (char c, return (), mutate)
@@ -50,7 +47,7 @@ defNormalMap operators =
     continuingBindings ++
     nonrepeatableBindings ++
     jumpBindings ++
-    fileEditBindings ++
+    gotoFileBindings ++
     [tabTraversalBinding]
 
 motionBinding :: VimBinding
@@ -273,8 +270,8 @@ nonrepeatableBindings = fmap (mkBindingE Normal Drop)
     , ("<C-w>p", prevWinE, resetCount)
     ]
 
-fileEditBindings :: [VimBinding]
-fileEditBindings =  fmap (mkStringBindingY Normal)
+gotoFileBindings :: [VimBinding]
+gotoFileBindings =  fmap (mkStringBindingY Normal)
     [ ("gf", openFileUnderCursor Nothing, resetCount)
     , ("<C-w>gf", openFileUnderCursor $ Just newTabE, resetCount)
     , ("<C-w>f", openFileUnderCursor $ Just (splitE >> prevWinE), resetCount)
@@ -378,13 +375,8 @@ tabTraversalBinding = VimBindingE f
 
 openFileUnderCursor :: Maybe (EditorM ()) -> YiM ()
 openFileUnderCursor editorAction = do
-    fileName   <- withEditor . withBuffer0 $ readUnitB unitViWORD
-    fileExists <- io $ doesFileExist fileName
-    if (not fileExists) then
-        withEditor . fail $ "Can't find file \"" ++ fileName ++ "\""
-    else do
-        maybeM withEditor editorAction
-        void . editFile $ fileName 
+    path <- withEditor . withBuffer0 $ readUnitB unitViWORD
+    gotoFile path editorAction
 
 -- TODO: withCount name implies that parameter has type (Int -> EditorM ())
 --       Is there a better name for this function?

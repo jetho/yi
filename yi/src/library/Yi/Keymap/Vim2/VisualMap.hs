@@ -9,6 +9,7 @@ import Control.Lens hiding ((-~), op)
 import Data.Char (ord)
 import Data.List (group)
 import Data.Maybe (fromJust)
+import Data.String.Utils (strip)
 
 import Yi.Buffer hiding (Insert)
 import Yi.Editor
@@ -26,7 +27,7 @@ defVisualMap operators =
     [escBinding, motionBinding, changeVisualStyleBinding, setMarkBinding]
     ++ [chooseRegisterBinding]
     ++ operatorBindings operators ++ digitBindings ++ [replaceBinding, switchEdgeBinding]
-    ++ [insertBinding, exBinding, shiftDBinding]
+    ++ [insertBinding, exBinding, shiftDBinding, gotoFileBinding]
 
 escAction :: EditorM RepeatToken
 escAction = do
@@ -229,4 +230,25 @@ insertBinding = VimBindingE f
                   modifyStateE $ \s -> s { vsSecondaryCursors = drop 1 cursors }
                   switchModeE $ Insert (head evs)
                   return Continue
+          f _ _ = NoMatch
+
+textUnderSelection :: BufferM String
+textUnderSelection = regionOfSelectionB >>= inclusiveRegionB >>= readRegionB 
+
+gotoFileBinding :: VimBinding
+gotoFileBinding = VimBindingY f
+    where f "<C-w>" (VimState { vsMode = (Visual _) })  = PartialMatch
+          f "<C-w>g" (VimState { vsMode = (Visual _) }) = PartialMatch
+          f evs (VimState { vsMode = (Visual _) })
+            | evs `elem` ["gf", "<C-w>gf", "<C-w>f"]
+            = WholeMatch $ do
+                  let editorAction = case evs of
+                         "gf"      -> Nothing
+                         "<C-w>gf" -> Just newTabE
+                         "<C-w>f"  -> Just (splitE >> prevWinE)
+                         _         -> error "Just silencing false positive warning."
+                  path <- strip <$> (withEditor . withBuffer0 $ textUnderSelection)
+                  withEditor escAction
+                  gotoFile path editorAction
+                  return Drop
           f _ _ = NoMatch

@@ -13,6 +13,7 @@ module Yi.Keymap.Vim2.Utils
   , addNewLineIfNecessary
   , indentBlockRegionB
   , addVimJumpHereE
+  , gotoFile
   ) where
 
 import Control.Applicative
@@ -24,6 +25,7 @@ import Data.List (find, group)
 import Data.Maybe (maybe)
 import qualified Data.Rope as R
 import Safe (headDef)
+import System.Directory (doesFileExist)
 
 import Yi.Buffer hiding (Insert)
 import Yi.Editor
@@ -34,6 +36,8 @@ import Yi.Keymap.Vim2.Motion
 import Yi.Keymap.Vim2.StateUtils
 import Yi.Keymap.Vim2.EventUtils
 import Yi.Monad
+import Yi.File (editFile)
+import Yi.Utils (io)
 
 -- 'mkBindingE' and 'mkBindingY' are helper functions for bindings
 -- where VimState mutation is not dependent on action performed
@@ -179,3 +183,12 @@ addNewLineIfNecessary rope = if lastChar == '\n'
                              then rope
                              else R.append rope (R.fromString "\n")
     where lastChar = head $ R.toString $ R.drop (R.length rope - 1) rope
+
+gotoFile :: String -> Maybe (EditorM ()) -> YiM ()
+gotoFile filePath editorAction = do
+    fileExists <- io $ doesFileExist filePath
+    if (not fileExists) then
+        withEditor . fail $ "Can't find file \"" ++ filePath ++ "\""
+    else do
+        maybeM withEditor editorAction
+        void . editFile $ filePath
