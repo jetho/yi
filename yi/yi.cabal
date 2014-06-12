@@ -239,7 +239,7 @@ library
     fingertree >= 0 && <0.2,
     hashable >=1.1.2.5,
     hint > 0.3.1,
-    MissingH,
+    MissingH >= 1.0.0,
     mtl >= 0.1.0.1,
     parsec >= 3.0,
     pointedlist >= 0.5,
